@@ -1,8 +1,9 @@
 <controls:FancyWindow xmlns="https://spacestation14.io"
                       xmlns:controls="clr-namespace:Content.Client.UserInterface.Controls"
                       Title="{Loc 'nii-terminal-title'}"
-                      MinSize="420 300">
-    <BoxContainer Orientation="Vertical" Margin="12">
+                      MinSize="460 520">
+    <ScrollContainer VerticalExpand="True">
+    <BoxContainer Orientation="Vertical" Margin="12" HorizontalExpand="True">
         <Label Text="{Loc 'nii-terminal-institute-name'}"
                StyleClasses="LabelHeading"
                HorizontalAlignment="Center"
@@ -37,9 +38,35 @@
                    HorizontalAlignment="Center" />
         </PanelContainer>
 
-        <Label Text="{Loc 'nii-terminal-readonly-hint'}"
-               StyleClasses="LabelSubText"
-               HorizontalAlignment="Center"
-               Margin="0 14 0 0" />
+        <Label Text="{Loc 'nii-terminal-project-heading'}"
+               StyleClasses="LabelHeading"
+               Margin="0 18 0 8" />
+
+        <Label Name="ProjectNameValue" StyleClasses="LabelSubText" Margin="0 0 0 6" />
+
+        <GridContainer Columns="2" HorizontalExpand="True">
+            <Label Text="{Loc 'nii-terminal-project-status'}" />
+            <Label Name="ProjectStatusValue" HorizontalAlignment="Right" />
+
+            <Label Text="{Loc 'nii-terminal-project-cost'}" />
+            <Label Name="ProjectCostValue" HorizontalAlignment="Right" />
+
+            <Label Text="{Loc 'nii-terminal-project-reagent'}" />
+            <Label Name="ProjectReagentValue" HorizontalAlignment="Right" />
+
+            <Label Text="{Loc 'nii-terminal-project-duration'}" />
+            <Label Name="ProjectDurationValue" HorizontalAlignment="Right" />
+        </GridContainer>
+
+        <Button Name="AuthorizeProjectButton"
+                Text="{Loc 'nii-terminal-project-authorize'}"
+                HorizontalExpand="True"
+                Margin="0 10 0 0" />
+
+        <Label Text="{Loc 'nii-terminal-event-log'}"
+               StyleClasses="LabelHeading"
+               Margin="0 18 0 6" />
+        <Label Name="EventLogValue" StyleClasses="LabelSubText" />
     </BoxContainer>
+    </ScrollContainer>
 </controls:FancyWindow>

@@ -5,9 +5,13 @@ using Content.Server.Atmos.EntitySystems;
 using Content.Server.GameTicking;
 using Content.Server.Mind;
 using Content.Server.Nii.Components;
+using Content.Server.Nii.Systems;
 using Content.Shared.Atmos;
+using Content.Shared.Chemistry.EntitySystems;
 using Content.Shared.CCVar;
 using Content.Shared.GameTicking;
+using Content.Shared.FixedPoint;
+using Content.Shared.Nii;
 using Content.Shared.Preferences;
 using Content.Shared.Nii.Components;
 using Content.Shared.Roles;
@@ -82,11 +86,48 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(institute!.Balance, Is.EqualTo(500_000));
         Assert.That(institutes.MoveNext(out _, out _), Is.False);
 
+        var project = Server.ProtoMan.Index(institute.ActiveProject);
+        var terminalSystem = Server.System<NiiDirectorTerminalSystem>();
+        Assert.That(terminalSystem.TryAuthorizeResearch(institute), Is.True);
+        Assert.That(institute.ResearchStatus, Is.EqualTo(NiiResearchStatus.Authorized));
+        Assert.That(institute.Balance, Is.EqualTo(500_000 - project.Cost));
+        Assert.That(terminalSystem.TryAuthorizeResearch(institute), Is.False);
+        Assert.That(institute.Balance, Is.EqualTo(500_000 - project.Cost));
+
+        var machines = SEntMan.EntityQueryEnumerator<NiiResearchMachineComponent>();
+        Assert.That(machines.MoveNext(out var machineUid, out var machine), Is.True);
+        Assert.That(machines.MoveNext(out _, out _), Is.False);
+
+        var samples = SEntMan.EntityQueryEnumerator<NiiResearchSampleComponent>();
+        Assert.That(samples.MoveNext(out var sampleUid, out _), Is.True);
+        Assert.That(samples.MoveNext(out _, out _), Is.False);
+
+        var researchSystem = Server.System<NiiResearchMachineSystem>();
+        var machineEntity = new Entity<NiiResearchMachineComponent>(machineUid, machine!);
+        Assert.That(researchSystem.TryStartResearch(machineEntity, sampleUid, player.Value), Is.True);
+        Assert.That(institute.ResearchStatus, Is.EqualTo(NiiResearchStatus.Running));
+
+        var solutions = Server.System<SharedSolutionContainerSystem>();
+        Assert.That(solutions.TryGetSolution(sampleUid, "beaker", out _, out var sampleSolution), Is.True);
+        Assert.That(sampleSolution!.GetTotalPrototypeQuantity(project.RequiredReagent), Is.EqualTo(FixedPoint2.Zero));
+
+        machine!.ElapsedSeconds = project.DurationSeconds;
+        await Pair.RunTicksSync(2);
+        Assert.That(institute.ResearchStatus, Is.EqualTo(NiiResearchStatus.Completed));
+        Assert.That(institute.Science, Is.EqualTo(project.ScienceReward));
+        Assert.That(institute.Reputation, Is.EqualTo(project.ReputationReward));
+
+        var results = SEntMan.EntityQueryEnumerator<NiiResearchResultComponent>();
+        Assert.That(results.MoveNext(out var resultUid, out _), Is.True);
+        Assert.That(resultUid.IsValid(), Is.True);
+        Assert.That(results.MoveNext(out _, out _), Is.False);
+
+        var balanceBeforeDays = institute.Balance;
         institute.ElapsedSeconds = 0f;
         institute.DayDurationSeconds = 0.01f;
         await Pair.RunTicksSync(2);
         Assert.That(institute.CurrentDay, Is.GreaterThan(1));
-        Assert.That(institute.Balance, Is.EqualTo(500_000 - 25_000 * (institute.CurrentDay - 1)));
+        Assert.That(institute.Balance, Is.EqualTo(balanceBeforeDays - 25_000 * (institute.CurrentDay - 1)));
 
         await Server.WaitPost(() => ticker.RestartRound());
     }

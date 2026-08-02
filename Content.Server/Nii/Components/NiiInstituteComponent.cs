@@ -1,3 +1,7 @@
+using Content.Shared.Nii;
+using Content.Shared.Nii.Prototypes;
+using Robust.Shared.Prototypes;
+
 namespace Content.Server.Nii.Components;
 
 /// <summary>
@@ -20,6 +24,15 @@ public sealed partial class NiiInstituteComponent : Component
 
     [DataField("science")]
     public int Science;
+
+    [DataField("activeProject")]
+    public ProtoId<NiiResearchProjectPrototype> ActiveProject = "NiiStablePlasmaCulture";
+
+    [DataField("researchStatus")]
+    public NiiResearchStatus ResearchStatus = NiiResearchStatus.Available;
+
+    [DataField("eventLog")]
+    public List<NiiInstituteEventType> EventLog = [NiiInstituteEventType.InstituteStarted];
 
     [DataField("currentDay")]
     public int CurrentDay = 1;

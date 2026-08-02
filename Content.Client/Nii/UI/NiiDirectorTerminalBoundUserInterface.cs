@@ -14,6 +14,7 @@ public sealed class NiiDirectorTerminalBoundUserInterface(EntityUid owner, Enum 
     {
         base.Open();
         _window = this.CreateWindow<NiiDirectorTerminalWindow>();
+        _window.AuthorizeProjectRequested += OnAuthorizeProjectRequested;
     }
 
     protected override void UpdateState(BoundUserInterfaceState state)
@@ -22,5 +23,10 @@ public sealed class NiiDirectorTerminalBoundUserInterface(EntityUid owner, Enum 
 
         if (state is NiiDirectorTerminalBuiState terminalState)
             _window?.UpdateState(terminalState);
+    }
+
+    private void OnAuthorizeProjectRequested()
+    {
+        SendMessage(new NiiAuthorizeResearchMessage());
     }
 }

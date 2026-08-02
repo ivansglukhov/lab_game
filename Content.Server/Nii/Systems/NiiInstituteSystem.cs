@@ -1,4 +1,5 @@
 using Content.Server.Nii.Components;
+using Content.Shared.Nii;
 
 namespace Content.Server.Nii.Systems;
 
@@ -7,6 +8,8 @@ namespace Content.Server.Nii.Systems;
 /// </summary>
 public sealed partial class NiiInstituteSystem : EntitySystem
 {
+    private const int MaximumEventLogEntries = 6;
+
     [Dependency] private NiiDirectorTerminalSystem _terminals = default!;
 
     public override void Update(float frameTime)
@@ -41,5 +44,12 @@ public sealed partial class NiiInstituteSystem : EntitySystem
         institute.Balance += (institute.DailyFunding - institute.DailyExpenses) * days;
         institute.CurrentDay += days;
         institute.IsBankrupt = institute.Balance < 0;
+    }
+
+    public static void AddEvent(NiiInstituteComponent institute, NiiInstituteEventType eventType)
+    {
+        institute.EventLog.Add(eventType);
+        if (institute.EventLog.Count > MaximumEventLogEntries)
+            institute.EventLog.RemoveAt(0);
     }
 }

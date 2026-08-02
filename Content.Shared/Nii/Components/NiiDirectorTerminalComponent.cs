@@ -1,3 +1,4 @@
+using Content.Shared.Nii;
 using Robust.Shared.GameStates;
 using Robust.Shared.Serialization;
 
@@ -27,6 +28,13 @@ public sealed class NiiDirectorTerminalBuiState : BoundUserInterfaceState
     public int Reputation { get; }
     public int Science { get; }
     public bool IsBankrupt { get; }
+    public string ProjectName { get; }
+    public int ProjectCost { get; }
+    public int RequiredReagentAmount { get; }
+    public int ProjectDurationSeconds { get; }
+    public NiiResearchStatus ResearchStatus { get; }
+    public bool CanAuthorize { get; }
+    public NiiInstituteEventType[] EventLog { get; }
 
     public NiiDirectorTerminalBuiState(
         int currentDay,
@@ -35,7 +43,14 @@ public sealed class NiiDirectorTerminalBuiState : BoundUserInterfaceState
         int dailyExpenses,
         int reputation,
         int science,
-        bool isBankrupt)
+        bool isBankrupt,
+        string projectName,
+        int projectCost,
+        int requiredReagentAmount,
+        int projectDurationSeconds,
+        NiiResearchStatus researchStatus,
+        bool canAuthorize,
+        NiiInstituteEventType[] eventLog)
     {
         CurrentDay = currentDay;
         Balance = balance;
@@ -44,5 +59,15 @@ public sealed class NiiDirectorTerminalBuiState : BoundUserInterfaceState
         Reputation = reputation;
         Science = science;
         IsBankrupt = isBankrupt;
+        ProjectName = projectName;
+        ProjectCost = projectCost;
+        RequiredReagentAmount = requiredReagentAmount;
+        ProjectDurationSeconds = projectDurationSeconds;
+        ResearchStatus = researchStatus;
+        CanAuthorize = canAuthorize;
+        EventLog = eventLog;
     }
 }
+
+[Serializable, NetSerializable]
+public sealed class NiiAuthorizeResearchMessage : BoundUserInterfaceMessage;

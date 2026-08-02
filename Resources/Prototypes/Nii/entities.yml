@@ -22,3 +22,53 @@
     interfaces:
       enum.NiiDirectorTerminalUiKey.Key:
         type: NiiDirectorTerminalBoundUserInterface
+
+- type: entity
+  id: NiiResearchMachine
+  parent: BaseMachine
+  name: установка плазменной стабилизации
+  description: Экспериментальная установка для выращивания и стабилизации плазменных культур.
+  placement:
+    mode: SnapgridCenter
+  components:
+  - type: Sprite
+    noRot: true
+    sprite: Structures/Machines/artifact_analyzer.rsi
+    drawdepth: HighFloorObjects
+    layers:
+    - state: icon
+    - state: display
+      shader: unshaded
+  - type: Transform
+    anchored: true
+  - type: NiiResearchMachine
+
+- type: entity
+  id: NiiPlasmaCultureSample
+  parent: Beaker
+  name: исходная плазменная культура
+  description: Подготовленная культура, содержащая 15 единиц плазмы.
+  components:
+  - type: NiiResearchSample
+  - type: Label
+    currentLabel: исходная плазменная культура
+  - type: Solution
+    solution:
+      reagents:
+      - ReagentId: Plasma
+        Quantity: 15
+
+- type: entity
+  id: NiiStablePlasmaCultureResult
+  parent: Beaker
+  name: стабильная плазменная культура
+  description: Первый воспроизводимый результат НИИ «Горизонт».
+  components:
+  - type: Label
+    currentLabel: стабильная плазменная культура
+  - type: NiiResearchResult
+  - type: Solution
+    solution:
+      reagents:
+      - ReagentId: Plasma
+        Quantity: 5
