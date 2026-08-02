@@ -1,14 +1,19 @@
 #nullable enable
+using System.Numerics;
 using Content.IntegrationTests.Fixtures;
+using Content.Server.Atmos.EntitySystems;
 using Content.Server.GameTicking;
 using Content.Server.Mind;
 using Content.Server.Nii.Components;
+using Content.Shared.Atmos;
 using Content.Shared.CCVar;
 using Content.Shared.GameTicking;
 using Content.Shared.Preferences;
 using Content.Shared.Nii.Components;
 using Content.Shared.Roles;
 using Content.Shared.Roles.Jobs;
+using Content.Shared.Wall;
+using Robust.Shared.GameObjects;
 using Robust.Shared.Prototypes;
 
 namespace Content.IntegrationTests.Tests.Nii;
@@ -53,6 +58,23 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(terminals.MoveNext(out var terminalUid, out _), Is.True);
         Assert.That(terminalUid.IsValid(), Is.True);
         Assert.That(terminals.MoveNext(out _, out _), Is.False);
+
+        var playerTransform = SEntMan.GetComponent<TransformComponent>(player.Value);
+        var terminalTransform = SEntMan.GetComponent<TransformComponent>(terminalUid);
+        Assert.That(terminalTransform.GridUid, Is.EqualTo(playerTransform.GridUid));
+        Assert.That(terminalTransform.LocalPosition, Is.EqualTo(new Vector2(2.5f, 12.5f)));
+
+        var wallCount = 0;
+        var walls = SEntMan.EntityQueryEnumerator<WallComponent>();
+        while (walls.MoveNext(out _))
+        {
+            wallCount++;
+        }
+        Assert.That(wallCount, Is.EqualTo(94));
+
+        var atmosphere = Server.System<AtmosphereSystem>().GetContainingMixture(player.Value);
+        Assert.That(atmosphere, Is.Not.Null);
+        Assert.That(atmosphere!.GetMoles(Gas.Oxygen), Is.GreaterThan(0));
 
         var institutes = SEntMan.EntityQueryEnumerator<NiiInstituteComponent>();
         Assert.That(institutes.MoveNext(out var instituteUid, out var institute), Is.True);

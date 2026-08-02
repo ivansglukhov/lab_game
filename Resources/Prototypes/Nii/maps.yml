@@ -1,11 +1,11 @@
 - type: gameMap
   id: NiiPrototypeMap
   mapName: НИИ «Горизонт»
-  mapPath: /Maps/Test/empty.yml
+  mapPath: /Maps/Nii/nii_prototype.yml
   minPlayers: 0
   maxPlayers: 1
   stations:
-    Empty:
+    Nii:
       stationProto: StandardNanotrasenStation
       components:
       - type: StationNameSetup

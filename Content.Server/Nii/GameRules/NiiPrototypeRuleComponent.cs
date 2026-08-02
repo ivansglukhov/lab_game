@@ -11,10 +11,5 @@ public sealed partial class NiiPrototypeRuleComponent : Component
     [DataField("institutePrototype")]
     public EntProtoId InstitutePrototype = "NiiInstituteState";
 
-    [DataField("directorTerminalPrototype")]
-    public EntProtoId DirectorTerminalPrototype = "NiiDirectorTerminal";
-
     public EntityUid? Institute;
-
-    public EntityUid? DirectorTerminal;
 }
