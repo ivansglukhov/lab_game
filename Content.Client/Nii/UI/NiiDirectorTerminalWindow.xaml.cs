@@ -38,6 +38,18 @@ public sealed partial class NiiDirectorTerminalWindow : FancyWindow
             "nii-terminal-project-duration-value",
             ("seconds", state.ProjectDurationSeconds));
         AuthorizeProjectButton.Disabled = !state.CanAuthorize;
+        WorkOrderStatusValue.Text = state.HasWorkOrder
+            ? Loc.GetString(WorkOrderStatusLocId(state.WorkOrderStatus))
+            : Loc.GetString("nii-work-order-status-none");
+        WorkOrderAssigneeValue.Text = string.IsNullOrEmpty(state.AssignedEmployeeName)
+            ? Loc.GetString("nii-work-order-assignee-none")
+            : state.AssignedEmployeeName;
+        var isBlocked = state.HasWorkOrder && state.WorkOrderStatus == NiiWorkOrderStatus.Blocked;
+        WorkOrderBlockLabel.Visible = isBlocked;
+        WorkOrderBlockValue.Visible = isBlocked;
+        WorkOrderBlockValue.Text = isBlocked
+            ? Loc.GetString(WorkOrderBlockReasonLocId(state.WorkOrderBlockReason))
+            : string.Empty;
         EventLogValue.Text = string.Join("\n", state.EventLog.Select(EventText));
     }
 
@@ -70,5 +82,35 @@ public sealed partial class NiiDirectorTerminalWindow : FancyWindow
         };
 
         return $"- {Loc.GetString(locId)}";
+    }
+
+    private static string WorkOrderStatusLocId(NiiWorkOrderStatus status)
+    {
+        return status switch
+        {
+            NiiWorkOrderStatus.Created => "nii-work-order-status-created",
+            NiiWorkOrderStatus.AwaitingAssignment => "nii-work-order-status-awaiting-assignment",
+            NiiWorkOrderStatus.Assigned => "nii-work-order-status-assigned",
+            NiiWorkOrderStatus.FetchingSample => "nii-work-order-status-fetching-sample",
+            NiiWorkOrderStatus.DeliveringSample => "nii-work-order-status-delivering-sample",
+            NiiWorkOrderStatus.Running => "nii-work-order-status-running",
+            NiiWorkOrderStatus.Completed => "nii-work-order-status-completed",
+            NiiWorkOrderStatus.Blocked => "nii-work-order-status-blocked",
+            NiiWorkOrderStatus.Cancelled => "nii-work-order-status-cancelled",
+            _ => "nii-work-order-status-none",
+        };
+    }
+
+    private static string WorkOrderBlockReasonLocId(NiiWorkOrderBlockReason reason)
+    {
+        return reason switch
+        {
+            NiiWorkOrderBlockReason.NoSample => "nii-work-order-block-no-sample",
+            NiiWorkOrderBlockReason.SampleInaccessible => "nii-work-order-block-sample-inaccessible",
+            NiiWorkOrderBlockReason.MachineBusy => "nii-work-order-block-machine-busy",
+            NiiWorkOrderBlockReason.MachineInaccessible => "nii-work-order-block-machine-inaccessible",
+            NiiWorkOrderBlockReason.EmployeeUnavailable => "nii-work-order-block-employee-unavailable",
+            _ => "nii-work-order-block-none",
+        };
     }
 }

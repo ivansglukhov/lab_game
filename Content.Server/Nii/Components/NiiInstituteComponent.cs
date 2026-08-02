@@ -42,6 +42,10 @@ public sealed partial class NiiInstituteComponent : Component
 
     public List<EntityUid> Laboratories = [];
 
+    public EntityUid? ActiveWorkOrder;
+
+    public EntityUid? LastWorkOrder;
+
     /// <summary>
     /// Negative balance is a soft failure state and does not stop the round.
     /// </summary>

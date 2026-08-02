@@ -28,6 +28,10 @@ nii-terminal-project-authorize = Утвердить финансирование
 nii-terminal-project-reagent-value = плазма, { $amount } ед.
 nii-terminal-project-duration-value = { $seconds } сек.
 nii-terminal-event-log = Журнал института
+nii-terminal-work-order-heading = Поручение лаборатории
+nii-terminal-work-order-status = Состояние поручения
+nii-terminal-work-order-assignee = Исполнитель
+nii-terminal-work-order-block-reason = Причина остановки
 
 nii-project-stable-plasma-culture-name = «Стабильная плазменная культура»
 
@@ -35,6 +39,24 @@ nii-research-status-available = ожидает решения
 nii-research-status-authorized = финансирование утверждено
 nii-research-status-running = эксперимент выполняется
 nii-research-status-completed = завершён
+
+nii-work-order-status-none = не создано
+nii-work-order-status-created = создано
+nii-work-order-status-awaiting-assignment = ожидает назначения
+nii-work-order-status-assigned = назначено
+nii-work-order-status-fetching-sample = исполнитель ищет образец
+nii-work-order-status-delivering-sample = образец доставляется
+nii-work-order-status-running = эксперимент выполняется
+nii-work-order-status-completed = выполнено
+nii-work-order-status-blocked = работа остановлена
+nii-work-order-status-cancelled = отменено
+nii-work-order-assignee-none = не назначен
+nii-work-order-block-none = нет
+nii-work-order-block-no-sample = отсутствует подходящий образец
+nii-work-order-block-sample-inaccessible = образец недоступен
+nii-work-order-block-machine-busy = установка занята
+nii-work-order-block-machine-inaccessible = установка недоступна
+nii-work-order-block-employee-unavailable = нет свободного исследователя
 
 nii-event-institute-started = Институт приступил к работе.
 nii-event-project-authorized = Директор утвердил финансирование плазменного проекта.

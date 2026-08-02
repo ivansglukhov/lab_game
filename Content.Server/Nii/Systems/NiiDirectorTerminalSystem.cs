@@ -15,6 +15,7 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
 {
     [Dependency] private UserInterfaceSystem _ui = default!;
     [Dependency] private IPrototypeManager _prototypes = default!;
+    [Dependency] private NiiResearchWorkOrderSystem _workOrders = default!;
 
     public override void Initialize()
     {
@@ -22,6 +23,16 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
 
         SubscribeLocalEvent<NiiDirectorTerminalComponent, BeforeActivatableUIOpenEvent>(OnBeforeUiOpen);
         SubscribeLocalEvent<NiiDirectorTerminalComponent, NiiAuthorizeResearchMessage>(OnAuthorizeResearch);
+        SubscribeLocalEvent<NiiResearchWorkOrderComponent, NiiWorkOrderChangedEvent>(OnWorkOrderChanged);
+    }
+
+    private void OnWorkOrderChanged(
+        Entity<NiiResearchWorkOrderComponent> order,
+        ref NiiWorkOrderChangedEvent args)
+    {
+        if (order.Comp.Institute is { } instituteUid &&
+            TryComp<NiiInstituteComponent>(instituteUid, out var institute))
+            RefreshAll(institute);
     }
 
     private void OnAuthorizeResearch(
@@ -32,23 +43,29 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
             return;
 
         var query = EntityQueryEnumerator<NiiInstituteComponent>();
-        if (!query.MoveNext(out _, out var institute))
+        if (!query.MoveNext(out var instituteUid, out var institute))
             return;
 
-        TryAuthorizeResearch(institute);
+        TryAuthorizeResearch((instituteUid, institute), args.Actor);
     }
 
-    public bool TryAuthorizeResearch(NiiInstituteComponent institute)
+    public bool TryAuthorizeResearch(
+        Entity<NiiInstituteComponent> institute,
+        EntityUid? requestedBy = null)
     {
-        var project = _prototypes.Index(institute.ActiveProject);
-        if (institute.ResearchStatus != NiiResearchStatus.Available || institute.Balance < project.Cost)
+        var project = _prototypes.Index(institute.Comp.ActiveProject);
+        if (institute.Comp.ResearchStatus != NiiResearchStatus.Available ||
+            institute.Comp.Balance < project.Cost)
             return false;
 
-        institute.Balance -= project.Cost;
-        institute.ResearchStatus = NiiResearchStatus.Authorized;
-        institute.IsBankrupt = institute.Balance < 0;
-        NiiInstituteSystem.AddEvent(institute, NiiInstituteEventType.ProjectAuthorized);
-        RefreshAll(institute);
+        if (_workOrders.CreateAndAssign(institute, requestedBy) is null)
+            return false;
+
+        institute.Comp.Balance -= project.Cost;
+        institute.Comp.ResearchStatus = NiiResearchStatus.Authorized;
+        institute.Comp.IsBankrupt = institute.Comp.Balance < 0;
+        NiiInstituteSystem.AddEvent(institute.Comp, NiiInstituteEventType.ProjectAuthorized);
+        RefreshAll(institute.Comp);
         return true;
     }
 
@@ -73,6 +90,11 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
     private void SetState(EntityUid terminal, NiiInstituteComponent institute)
     {
         var project = _prototypes.Index(institute.ActiveProject);
+        var workOrderUid = institute.ActiveWorkOrder ?? institute.LastWorkOrder;
+        var hasWorkOrder = TryComp<NiiResearchWorkOrderComponent>(workOrderUid, out var workOrder);
+        var assignedEmployeeName = workOrder?.AssignedTo is { } employeeUid && !Deleted(employeeUid)
+            ? MetaData(employeeUid).EntityName
+            : string.Empty;
         _ui.SetUiState(
             terminal,
             NiiDirectorTerminalUiKey.Key,
@@ -90,6 +112,10 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
                 (int) project.DurationSeconds,
                 institute.ResearchStatus,
                 institute.ResearchStatus == NiiResearchStatus.Available && institute.Balance >= project.Cost,
+                hasWorkOrder,
+                workOrder?.Status ?? NiiWorkOrderStatus.Created,
+                workOrder?.BlockReason ?? NiiWorkOrderBlockReason.None,
+                assignedEmployeeName,
                 institute.EventLog.ToArray()));
     }
 }

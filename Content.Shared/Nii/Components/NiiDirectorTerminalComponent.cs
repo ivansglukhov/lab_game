@@ -34,6 +34,10 @@ public sealed class NiiDirectorTerminalBuiState : BoundUserInterfaceState
     public int ProjectDurationSeconds { get; }
     public NiiResearchStatus ResearchStatus { get; }
     public bool CanAuthorize { get; }
+    public bool HasWorkOrder { get; }
+    public NiiWorkOrderStatus WorkOrderStatus { get; }
+    public NiiWorkOrderBlockReason WorkOrderBlockReason { get; }
+    public string AssignedEmployeeName { get; }
     public NiiInstituteEventType[] EventLog { get; }
 
     public NiiDirectorTerminalBuiState(
@@ -50,6 +54,10 @@ public sealed class NiiDirectorTerminalBuiState : BoundUserInterfaceState
         int projectDurationSeconds,
         NiiResearchStatus researchStatus,
         bool canAuthorize,
+        bool hasWorkOrder,
+        NiiWorkOrderStatus workOrderStatus,
+        NiiWorkOrderBlockReason workOrderBlockReason,
+        string assignedEmployeeName,
         NiiInstituteEventType[] eventLog)
     {
         CurrentDay = currentDay;
@@ -65,6 +73,10 @@ public sealed class NiiDirectorTerminalBuiState : BoundUserInterfaceState
         ProjectDurationSeconds = projectDurationSeconds;
         ResearchStatus = researchStatus;
         CanAuthorize = canAuthorize;
+        HasWorkOrder = hasWorkOrder;
+        WorkOrderStatus = workOrderStatus;
+        WorkOrderBlockReason = workOrderBlockReason;
+        AssignedEmployeeName = assignedEmployeeName;
         EventLog = eventLog;
     }
 }

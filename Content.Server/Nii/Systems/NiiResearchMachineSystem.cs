@@ -17,6 +17,7 @@ public sealed partial class NiiResearchMachineSystem : EntitySystem
     [Dependency] private IPrototypeManager _prototypes = default!;
     [Dependency] private SharedPopupSystem _popup = default!;
     [Dependency] private NiiDirectorTerminalSystem _terminals = default!;
+    [Dependency] private NiiResearchWorkOrderSystem _workOrders = default!;
 
     public override void Initialize()
     {
@@ -71,9 +72,16 @@ public sealed partial class NiiResearchMachineSystem : EntitySystem
         }
 
         var project = _prototypes.Index(institute.ActiveProject);
+        if (institute.ActiveWorkOrder is not { } workOrderUid ||
+            !TryComp<NiiResearchWorkOrderComponent>(workOrderUid, out var workOrder) ||
+            !_workOrders.TryBeginDelivery((workOrderUid, workOrder), sample, machine.Owner))
+            return false;
+
         if (!_solutions.TryGetSolution(sample, machine.Comp.SolutionName, out var solutionEntity, out var solution) ||
             solution.GetTotalPrototypeQuantity(project.RequiredReagent) < project.RequiredReagentAmount)
         {
+            _workOrders.Block((workOrderUid, workOrder), NiiWorkOrderBlockReason.NoSample);
+            _terminals.RefreshAll(institute);
             _popup.PopupEntity(
                 Loc.GetString("nii-research-machine-insufficient-reagent",
                     ("amount", project.RequiredReagentAmount.Int())),
@@ -87,6 +95,7 @@ public sealed partial class NiiResearchMachineSystem : EntitySystem
         machine.Comp.ElapsedSeconds = 0f;
         machine.Comp.Institute = instituteUid;
         institute.ResearchStatus = NiiResearchStatus.Running;
+        _workOrders.MarkRunning((workOrderUid, workOrder));
         NiiInstituteSystem.AddEvent(institute, NiiInstituteEventType.ResearchStarted);
         _terminals.RefreshAll(institute);
         _popup.PopupEntity(Loc.GetString("nii-research-machine-started"), machine, user);
@@ -106,6 +115,9 @@ public sealed partial class NiiResearchMachineSystem : EntitySystem
         institute.Science += project.ScienceReward;
         institute.Reputation += project.ReputationReward;
         NiiInstituteSystem.AddEvent(institute, NiiInstituteEventType.ResearchCompleted);
+        if (institute.ActiveWorkOrder is { } workOrderUid &&
+            TryComp<NiiResearchWorkOrderComponent>(workOrderUid, out var workOrder))
+            _workOrders.Complete((workOrderUid, workOrder));
         Spawn(project.ResultPrototype, Transform(uid).Coordinates);
         _terminals.RefreshAll(institute);
     }

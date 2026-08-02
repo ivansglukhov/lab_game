@@ -132,11 +132,37 @@ public sealed class NiiPrototypeRoundTest : GameTest
 
         var project = Server.ProtoMan.Index(institute.ActiveProject);
         var terminalSystem = Server.System<NiiDirectorTerminalSystem>();
-        Assert.That(terminalSystem.TryAuthorizeResearch(institute), Is.True);
+        var authorized = false;
+        await Server.WaitPost(() => authorized = terminalSystem.TryAuthorizeResearch((instituteUid, institute)));
+        Assert.That(authorized, Is.True);
         Assert.That(institute.ResearchStatus, Is.EqualTo(NiiResearchStatus.Authorized));
         Assert.That(institute.Balance, Is.EqualTo(500_000 - project.Cost));
-        Assert.That(terminalSystem.TryAuthorizeResearch(institute), Is.False);
+        await Server.WaitPost(() => authorized = terminalSystem.TryAuthorizeResearch((instituteUid, institute)));
+        Assert.That(authorized, Is.False);
         Assert.That(institute.Balance, Is.EqualTo(500_000 - project.Cost));
+
+        var workOrders = SEntMan.EntityQueryEnumerator<NiiResearchWorkOrderComponent>();
+        Assert.That(workOrders.MoveNext(out var workOrderUid, out var workOrder), Is.True);
+        Assert.That(workOrders.MoveNext(out _, out _), Is.False);
+        Assert.That(institute.ActiveWorkOrder, Is.EqualTo(workOrderUid));
+        Assert.That(laboratory.ActiveWorkOrder, Is.EqualTo(workOrderUid));
+        Assert.That(workOrder!.Institute, Is.EqualTo(instituteUid));
+        Assert.That(workOrder.Laboratory, Is.EqualTo(laboratoryUid));
+        Assert.That(workOrder.AssignedTo, Is.Not.Null);
+        Assert.That(workOrder.Machine, Is.EqualTo(laboratory.ResearchMachine));
+        Assert.That(workOrder.Sample, Is.Not.Null);
+        Assert.That(workOrder.Status, Is.EqualTo(NiiWorkOrderStatus.FetchingSample));
+        Assert.That(SEntMan.GetComponent<NiiEmployeeComponent>(workOrder.AssignedTo!.Value).ActiveWorkOrder,
+            Is.EqualTo(workOrderUid));
+
+        var workOrderSystem = Server.System<NiiResearchWorkOrderSystem>();
+        var workOrderEntity = new Entity<NiiResearchWorkOrderComponent>(workOrderUid, workOrder);
+        workOrderSystem.Block(workOrderEntity, NiiWorkOrderBlockReason.NoSample);
+        Assert.That(workOrder.Status, Is.EqualTo(NiiWorkOrderStatus.Blocked));
+        Assert.That(workOrder.BlockReason, Is.EqualTo(NiiWorkOrderBlockReason.NoSample));
+        Assert.That(workOrderSystem.TryReserveSample(workOrderEntity), Is.True);
+        Assert.That(workOrder.Status, Is.EqualTo(NiiWorkOrderStatus.FetchingSample));
+        Assert.That(workOrder.BlockReason, Is.EqualTo(NiiWorkOrderBlockReason.None));
 
         var machines = SEntMan.EntityQueryEnumerator<NiiResearchMachineComponent>();
         Assert.That(machines.MoveNext(out var machineUid, out var machine), Is.True);
@@ -150,6 +176,9 @@ public sealed class NiiPrototypeRoundTest : GameTest
         var machineEntity = new Entity<NiiResearchMachineComponent>(machineUid, machine!);
         Assert.That(researchSystem.TryStartResearch(machineEntity, sampleUid, player.Value), Is.True);
         Assert.That(institute.ResearchStatus, Is.EqualTo(NiiResearchStatus.Running));
+        Assert.That(workOrder.Status, Is.EqualTo(NiiWorkOrderStatus.Running));
+        Assert.That(workOrder.Machine, Is.EqualTo(machineUid));
+        Assert.That(workOrder.Sample, Is.EqualTo(sampleUid));
 
         var solutions = Server.System<SharedSolutionContainerSystem>();
         Assert.That(solutions.TryGetSolution(sampleUid, "beaker", out _, out var sampleSolution), Is.True);
@@ -158,6 +187,11 @@ public sealed class NiiPrototypeRoundTest : GameTest
         machine!.ElapsedSeconds = project.DurationSeconds;
         await Pair.RunTicksSync(2);
         Assert.That(institute.ResearchStatus, Is.EqualTo(NiiResearchStatus.Completed));
+        Assert.That(workOrder.Status, Is.EqualTo(NiiWorkOrderStatus.Completed));
+        Assert.That(institute.ActiveWorkOrder, Is.Null);
+        Assert.That(institute.LastWorkOrder, Is.EqualTo(workOrderUid));
+        Assert.That(laboratory.ActiveWorkOrder, Is.Null);
+        Assert.That(SEntMan.GetComponent<NiiEmployeeComponent>(workOrder.AssignedTo!.Value).ActiveWorkOrder, Is.Null);
         Assert.That(institute.Science, Is.EqualTo(project.ScienceReward));
         Assert.That(institute.Reputation, Is.EqualTo(project.ReputationReward));
 
