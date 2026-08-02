@@ -15,6 +15,8 @@ public sealed class NiiDirectorTerminalBoundUserInterface(EntityUid owner, Enum 
         base.Open();
         _window = this.CreateWindow<NiiDirectorTerminalWindow>();
         _window.AuthorizeProjectRequested += OnAuthorizeProjectRequested;
+        _window.AssignResearcherRequested += OnAssignResearcherRequested;
+        _window.DelegatedAssignmentRequested += OnDelegatedAssignmentRequested;
     }
 
     protected override void UpdateState(BoundUserInterfaceState state)
@@ -28,5 +30,15 @@ public sealed class NiiDirectorTerminalBoundUserInterface(EntityUid owner, Enum 
     private void OnAuthorizeProjectRequested()
     {
         SendMessage(new NiiAuthorizeResearchMessage());
+    }
+
+    private void OnAssignResearcherRequested(NetEntity employee)
+    {
+        SendMessage(new NiiAssignResearcherMessage(employee));
+    }
+
+    private void OnDelegatedAssignmentRequested(bool enabled)
+    {
+        SendMessage(new NiiSetDelegatedAssignmentMessage(enabled));
     }
 }

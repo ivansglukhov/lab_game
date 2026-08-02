@@ -10,6 +10,21 @@ public enum NiiEmployeeRole : byte
 }
 
 [Serializable, NetSerializable]
+public enum NiiEmployeeAvailability : byte
+{
+    Available,
+    Busy,
+    Unavailable,
+}
+
+[Serializable, NetSerializable]
+public enum NiiLaboratoryAssignmentMode : byte
+{
+    Manual,
+    Delegated,
+}
+
+[Serializable, NetSerializable]
 public enum NiiWorkOrderStatus : byte
 {
     Created,

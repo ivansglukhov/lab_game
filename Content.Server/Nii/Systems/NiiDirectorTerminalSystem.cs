@@ -1,4 +1,6 @@
+using System.Linq;
 using Content.Server.Nii.Components;
+using Content.Shared.Mobs;
 using Content.Shared.Nii;
 using Content.Shared.Nii.Components;
 using Content.Shared.Nii.Prototypes;
@@ -23,7 +25,27 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
 
         SubscribeLocalEvent<NiiDirectorTerminalComponent, BeforeActivatableUIOpenEvent>(OnBeforeUiOpen);
         SubscribeLocalEvent<NiiDirectorTerminalComponent, NiiAuthorizeResearchMessage>(OnAuthorizeResearch);
+        SubscribeLocalEvent<NiiDirectorTerminalComponent, NiiAssignResearcherMessage>(OnAssignResearcher);
+        SubscribeLocalEvent<NiiDirectorTerminalComponent, NiiSetDelegatedAssignmentMessage>(OnSetDelegatedAssignment);
         SubscribeLocalEvent<NiiResearchWorkOrderComponent, NiiWorkOrderChangedEvent>(OnWorkOrderChanged);
+        SubscribeLocalEvent<NiiEmployeeComponent, MobStateChangedEvent>(OnEmployeeMobStateChanged);
+    }
+
+    private void OnEmployeeMobStateChanged(
+        Entity<NiiEmployeeComponent> employee,
+        ref MobStateChangedEvent args)
+    {
+        if (args.NewMobState != MobState.Alive &&
+            employee.Comp.ActiveWorkOrder is { } orderUid &&
+            TryComp<NiiResearchWorkOrderComponent>(orderUid, out var order) &&
+            order.Status is not (NiiWorkOrderStatus.Completed or NiiWorkOrderStatus.Cancelled))
+            _workOrders.Block((orderUid, order), NiiWorkOrderBlockReason.EmployeeUnavailable);
+
+        if (employee.Comp.Laboratory is { } laboratoryUid &&
+            TryComp<NiiLaboratoryComponent>(laboratoryUid, out var laboratory) &&
+            laboratory.Institute is { } instituteUid &&
+            TryComp<NiiInstituteComponent>(instituteUid, out var institute))
+            RefreshAll(institute);
     }
 
     private void OnWorkOrderChanged(
@@ -49,6 +71,67 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
         TryAuthorizeResearch((instituteUid, institute), args.Actor);
     }
 
+    private void OnAssignResearcher(
+        Entity<NiiDirectorTerminalComponent> terminal,
+        ref NiiAssignResearcherMessage args)
+    {
+        if (args.Actor is not { Valid: true } ||
+            !TryGetEntity(args.Employee, out var employeeUid) ||
+            !TryGetInstitute(out var instituteUid, out var institute))
+            return;
+
+        TryAssignResearcher((instituteUid, institute), employeeUid.Value);
+    }
+
+    private void OnSetDelegatedAssignment(
+        Entity<NiiDirectorTerminalComponent> terminal,
+        ref NiiSetDelegatedAssignmentMessage args)
+    {
+        if (args.Actor is not { Valid: true } ||
+            !TryGetInstitute(out var instituteUid, out var institute))
+            return;
+
+        TrySetDelegatedAssignment((instituteUid, institute), args.Enabled);
+    }
+
+    public bool TryAssignResearcher(
+        Entity<NiiInstituteComponent> institute,
+        EntityUid employeeUid)
+    {
+        if (institute.Comp.ActiveWorkOrder is not { } orderUid ||
+            !TryComp<NiiResearchWorkOrderComponent>(orderUid, out var order) ||
+            order.Laboratory is not { } laboratoryUid ||
+            !TryComp<NiiLaboratoryComponent>(laboratoryUid, out var laboratory))
+            return false;
+
+        return _workOrders.TryAssign((orderUid, order), (laboratoryUid, laboratory), employeeUid);
+    }
+
+    public bool TrySetDelegatedAssignment(
+        Entity<NiiInstituteComponent> institute,
+        bool enabled)
+    {
+        if (!TryGetPrimaryLaboratory(institute.Comp, out var laboratoryUid, out var laboratory))
+            return false;
+
+        if (enabled &&
+            (laboratory.Head is not { } headUid ||
+             _workOrders.GetAvailability(headUid) != NiiEmployeeAvailability.Available))
+            return false;
+
+        laboratory.AssignmentMode = enabled
+            ? NiiLaboratoryAssignmentMode.Delegated
+            : NiiLaboratoryAssignmentMode.Manual;
+
+        if (enabled &&
+            laboratory.ActiveWorkOrder is { } orderUid &&
+            TryComp<NiiResearchWorkOrderComponent>(orderUid, out var order))
+            _workOrders.TryAssignDelegated((orderUid, order), (laboratoryUid, laboratory));
+
+        RefreshAll(institute.Comp);
+        return true;
+    }
+
     public bool TryAuthorizeResearch(
         Entity<NiiInstituteComponent> institute,
         EntityUid? requestedBy = null)
@@ -58,13 +141,20 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
             institute.Comp.Balance < project.Cost)
             return false;
 
-        if (_workOrders.CreateAndAssign(institute, requestedBy) is null)
+        var orderUid = _workOrders.Create(institute, requestedBy);
+        if (orderUid is null)
             return false;
 
         institute.Comp.Balance -= project.Cost;
         institute.Comp.ResearchStatus = NiiResearchStatus.Authorized;
         institute.Comp.IsBankrupt = institute.Comp.Balance < 0;
         NiiInstituteSystem.AddEvent(institute.Comp, NiiInstituteEventType.ProjectAuthorized);
+
+        if (TryComp<NiiResearchWorkOrderComponent>(orderUid.Value, out var order) &&
+            order.Laboratory is { } laboratoryUid &&
+            TryComp<NiiLaboratoryComponent>(laboratoryUid, out var laboratory))
+            _workOrders.TryAssignDelegated((orderUid.Value, order), (laboratoryUid, laboratory));
+
         RefreshAll(institute.Comp);
         return true;
     }
@@ -95,6 +185,32 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
         var assignedEmployeeName = workOrder?.AssignedTo is { } employeeUid && !Deleted(employeeUid)
             ? MetaData(employeeUid).EntityName
             : string.Empty;
+        var hasLaboratory = TryGetPrimaryLaboratory(institute, out _, out var laboratory);
+        var headName = string.Empty;
+        var headAvailability = NiiEmployeeAvailability.Unavailable;
+        var assignmentMode = NiiLaboratoryAssignmentMode.Manual;
+        var researchers = Array.Empty<NiiEmployeeUiState>();
+
+        if (hasLaboratory)
+        {
+            assignmentMode = laboratory.AssignmentMode;
+            if (laboratory.Head is { } headUid && !Deleted(headUid))
+            {
+                headName = MetaData(headUid).EntityName;
+                headAvailability = _workOrders.GetAvailability(headUid);
+            }
+
+            researchers = laboratory.Researchers
+                .Where(uid => !Deleted(uid) && TryComp<NiiEmployeeComponent>(uid, out _))
+                .Select(uid => new NiiEmployeeUiState(
+                    GetNetEntity(uid),
+                    MetaData(uid).EntityName,
+                    NiiEmployeeRole.Researcher,
+                    _workOrders.GetAvailability(uid)))
+                .OrderBy(employee => employee.Name, StringComparer.CurrentCulture)
+                .ToArray();
+        }
+
         _ui.SetUiState(
             terminal,
             NiiDirectorTerminalUiKey.Key,
@@ -116,6 +232,44 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
                 workOrder?.Status ?? NiiWorkOrderStatus.Created,
                 workOrder?.BlockReason ?? NiiWorkOrderBlockReason.None,
                 assignedEmployeeName,
+                hasLaboratory,
+                headName,
+                headAvailability,
+                assignmentMode,
+                researchers,
                 institute.EventLog.ToArray()));
+    }
+
+    private bool TryGetInstitute(out EntityUid uid, out NiiInstituteComponent institute)
+    {
+        var query = EntityQueryEnumerator<NiiInstituteComponent>();
+        if (query.MoveNext(out uid, out var component))
+        {
+            institute = component;
+            return true;
+        }
+
+        institute = default!;
+        return false;
+    }
+
+    private bool TryGetPrimaryLaboratory(
+        NiiInstituteComponent institute,
+        out EntityUid uid,
+        out NiiLaboratoryComponent laboratory)
+    {
+        foreach (var laboratoryUid in institute.Laboratories)
+        {
+            if (!TryComp<NiiLaboratoryComponent>(laboratoryUid, out var candidate))
+                continue;
+
+            uid = laboratoryUid;
+            laboratory = candidate;
+            return true;
+        }
+
+        uid = default;
+        laboratory = default!;
+        return false;
     }
 }

@@ -11,6 +11,9 @@ public sealed partial class NiiLaboratoryComponent : Component
     [DataField]
     public string LaboratoryId = "main";
 
+    [DataField]
+    public NiiLaboratoryAssignmentMode AssignmentMode = NiiLaboratoryAssignmentMode.Manual;
+
     public EntityUid? Institute;
     public EntityUid? Head;
     public List<EntityUid> Researchers = [];

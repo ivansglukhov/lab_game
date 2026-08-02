@@ -1,4 +1,7 @@
+using System.Linq;
 using Content.Server.Nii.Components;
+using Content.Shared.Mobs;
+using Content.Shared.Mobs.Components;
 using Content.Shared.Nii;
 
 namespace Content.Server.Nii.Systems;
@@ -40,7 +43,7 @@ public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
         _sampleReconciliationQueued = true;
     }
 
-    public EntityUid? CreateAndAssign(
+    public EntityUid? Create(
         Entity<NiiInstituteComponent> institute,
         EntityUid? requestedBy = null)
     {
@@ -63,10 +66,11 @@ public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
             order.Institute = institute.Owner;
             order.Laboratory = laboratoryUid;
             order.RequestedBy = requestedBy;
+            order.Status = NiiWorkOrderStatus.AwaitingAssignment;
 
             institute.Comp.ActiveWorkOrder = orderUid;
             laboratory.ActiveWorkOrder = orderUid;
-            TryAssign((orderUid, order), (laboratoryUid, laboratory));
+            NotifyChanged((orderUid, order));
             return orderUid;
         }
 
@@ -75,37 +79,67 @@ public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
 
     public bool TryAssign(
         Entity<NiiResearchWorkOrderComponent> order,
-        Entity<NiiLaboratoryComponent> laboratory)
+        Entity<NiiLaboratoryComponent> laboratory,
+        EntityUid researcherUid)
     {
-        if (order.Comp.Status is NiiWorkOrderStatus.Completed or NiiWorkOrderStatus.Cancelled)
+        if (order.Comp.Status != NiiWorkOrderStatus.AwaitingAssignment ||
+            order.Comp.Laboratory != laboratory.Owner ||
+            !laboratory.Comp.Researchers.Contains(researcherUid) ||
+            !TryComp<NiiEmployeeComponent>(researcherUid, out var researcher) ||
+            researcher.Role != NiiEmployeeRole.Researcher ||
+            researcher.Laboratory != laboratory.Owner ||
+            GetAvailability(researcherUid, researcher) != NiiEmployeeAvailability.Available)
             return false;
 
-        order.Comp.Status = NiiWorkOrderStatus.AwaitingAssignment;
         order.Comp.BlockReason = NiiWorkOrderBlockReason.None;
-
-        foreach (var researcherUid in laboratory.Comp.Researchers)
-        {
-            if (!TryComp<NiiEmployeeComponent>(researcherUid, out var researcher) ||
-                researcher.ActiveWorkOrder is { } employeeOrder && !Deleted(employeeOrder))
-                continue;
-
+        if (researcher.ActiveWorkOrder is { } staleOrder && Deleted(staleOrder))
             researcher.ActiveWorkOrder = null;
-            order.Comp.AssignedTo = researcherUid;
-            researcher.ActiveWorkOrder = order.Owner;
-            order.Comp.Status = NiiWorkOrderStatus.Assigned;
 
-            if (laboratory.Comp.ResearchMachine is not { } machineUid || Deleted(machineUid))
-            {
-                Block(order, NiiWorkOrderBlockReason.MachineInaccessible);
-                return false;
-            }
+        order.Comp.AssignedTo = researcherUid;
+        researcher.ActiveWorkOrder = order.Owner;
+        order.Comp.Status = NiiWorkOrderStatus.Assigned;
 
-            order.Comp.Machine = machineUid;
-            return TryReserveSample(order);
+        if (laboratory.Comp.ResearchMachine is not { } machineUid || Deleted(machineUid))
+        {
+            Block(order, NiiWorkOrderBlockReason.MachineInaccessible);
+            return true;
         }
 
-        Block(order, NiiWorkOrderBlockReason.EmployeeUnavailable);
+        order.Comp.Machine = machineUid;
+        TryReserveSample(order);
+        return true;
+    }
+
+    public bool TryAssignDelegated(
+        Entity<NiiResearchWorkOrderComponent> order,
+        Entity<NiiLaboratoryComponent> laboratory)
+    {
+        if (laboratory.Comp.AssignmentMode != NiiLaboratoryAssignmentMode.Delegated ||
+            laboratory.Comp.Head is not { } headUid ||
+            GetAvailability(headUid) != NiiEmployeeAvailability.Available)
+            return false;
+
+        foreach (var researcherUid in laboratory.Comp.Researchers.OrderBy(uid => uid))
+        {
+            if (GetAvailability(researcherUid) == NiiEmployeeAvailability.Available)
+                return TryAssign(order, laboratory, researcherUid);
+        }
+
         return false;
+    }
+
+    public NiiEmployeeAvailability GetAvailability(
+        EntityUid employeeUid,
+        NiiEmployeeComponent? employee = null)
+    {
+        if (!Resolve(employeeUid, ref employee, false) ||
+            !TryComp<MobStateComponent>(employeeUid, out var mobState) ||
+            mobState.CurrentState != MobState.Alive)
+            return NiiEmployeeAvailability.Unavailable;
+
+        return employee.ActiveWorkOrder is { } activeOrder && !Deleted(activeOrder)
+            ? NiiEmployeeAvailability.Busy
+            : NiiEmployeeAvailability.Available;
     }
 
     public bool TryReserveSample(Entity<NiiResearchWorkOrderComponent> order)

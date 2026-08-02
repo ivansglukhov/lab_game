@@ -11,15 +11,29 @@ namespace Content.Client.Nii.UI;
 public sealed partial class NiiDirectorTerminalWindow : FancyWindow
 {
     public event Action? AuthorizeProjectRequested;
+    public event Action<NetEntity>? AssignResearcherRequested;
+    public event Action<bool>? DelegatedAssignmentRequested;
+
+    private NiiDirectorTerminalBuiState? _state;
+    private NiiEmployeeUiState[] _researchers = [];
 
     public NiiDirectorTerminalWindow()
     {
         RobustXamlLoader.Load(this);
         AuthorizeProjectButton.OnPressed += _ => AuthorizeProjectRequested?.Invoke();
+        AssignResearcherButton.OnPressed += _ => RequestAssignment();
+        ToggleDelegationButton.OnPressed += _ => DelegatedAssignmentRequested?.Invoke(
+            _state?.AssignmentMode != NiiLaboratoryAssignmentMode.Delegated);
+        ResearcherSelector.OnItemSelected += args =>
+        {
+            args.Button.SelectId(args.Id);
+            UpdateAssignmentControls();
+        };
     }
 
     public void UpdateState(NiiDirectorTerminalBuiState state)
     {
+        _state = state;
         DayValue.Text = state.CurrentDay.ToString();
         BalanceValue.Text = FormatCurrency(state.Balance);
         FundingValue.Text = FormatCurrency(state.DailyFunding);
@@ -50,7 +64,92 @@ public sealed partial class NiiDirectorTerminalWindow : FancyWindow
         WorkOrderBlockValue.Text = isBlocked
             ? Loc.GetString(WorkOrderBlockReasonLocId(state.WorkOrderBlockReason))
             : string.Empty;
+        UpdateLaboratory(state);
         EventLogValue.Text = string.Join("\n", state.EventLog.Select(EventText));
+    }
+
+    private void UpdateLaboratory(NiiDirectorTerminalBuiState state)
+    {
+        LaboratoryPanel.Visible = state.HasLaboratory;
+        if (!state.HasLaboratory)
+            return;
+
+        LaboratoryHeadValue.Text = string.IsNullOrEmpty(state.LaboratoryHeadName)
+            ? Loc.GetString("nii-terminal-employee-none")
+            : state.LaboratoryHeadName;
+        LaboratoryHeadStatusValue.Text = Loc.GetString(EmployeeAvailabilityLocId(state.LaboratoryHeadAvailability));
+        AssignmentModeValue.Text = Loc.GetString(state.AssignmentMode == NiiLaboratoryAssignmentMode.Delegated
+            ? "nii-assignment-mode-delegated"
+            : "nii-assignment-mode-manual");
+        ToggleDelegationButton.Text = Loc.GetString(state.AssignmentMode == NiiLaboratoryAssignmentMode.Delegated
+            ? "nii-terminal-delegation-disable"
+            : "nii-terminal-delegation-enable");
+        ToggleDelegationButton.Disabled = state.AssignmentMode == NiiLaboratoryAssignmentMode.Manual &&
+                                          state.LaboratoryHeadAvailability != NiiEmployeeAvailability.Available;
+
+        var selectedEntity = ResearcherSelector.ItemCount > 0 &&
+                             ResearcherSelector.SelectedId >= 0 &&
+                             ResearcherSelector.SelectedId < _researchers.Length
+            ? _researchers[ResearcherSelector.SelectedId].Entity
+            : NetEntity.Invalid;
+        _researchers = state.Researchers;
+        ResearcherSelector.Clear();
+        for (var i = 0; i < _researchers.Length; i++)
+        {
+            var researcher = _researchers[i];
+            ResearcherSelector.AddItem(Loc.GetString(
+                "nii-terminal-researcher-option",
+                ("name", researcher.Name),
+                ("status", Loc.GetString(EmployeeAvailabilityLocId(researcher.Availability)))), i);
+        }
+
+        var selectedIndex = Array.FindIndex(_researchers, researcher => researcher.Entity == selectedEntity);
+        if (selectedIndex >= 0)
+            ResearcherSelector.TrySelectId(selectedIndex);
+
+        ResearcherSelector.Disabled = _researchers.Length == 0;
+        UpdateAssignmentControls();
+    }
+
+    private void UpdateAssignmentControls()
+    {
+        if (_state is null)
+            return;
+
+        var hasSelection = ResearcherSelector.ItemCount > 0 &&
+                           ResearcherSelector.SelectedId >= 0 &&
+                           ResearcherSelector.SelectedId < _researchers.Length;
+        var selectedAvailable = hasSelection &&
+                                _researchers[ResearcherSelector.SelectedId].Availability ==
+                                NiiEmployeeAvailability.Available;
+        var awaitingAssignment = _state.HasWorkOrder &&
+                                 _state.WorkOrderStatus == NiiWorkOrderStatus.AwaitingAssignment;
+        AssignResearcherButton.Disabled = !awaitingAssignment || !selectedAvailable;
+
+        AssignmentHintValue.Text = AssignmentHint(_state, awaitingAssignment);
+    }
+
+    private string AssignmentHint(NiiDirectorTerminalBuiState state, bool awaitingAssignment)
+    {
+        if (state.Researchers.Length == 0)
+            return Loc.GetString("nii-terminal-assignment-no-researchers");
+        if (!awaitingAssignment)
+            return Loc.GetString("nii-terminal-assignment-no-pending-order");
+        if (state.Researchers.All(employee => employee.Availability != NiiEmployeeAvailability.Available))
+            return Loc.GetString("nii-terminal-assignment-no-available-researchers");
+        if (state.AssignmentMode == NiiLaboratoryAssignmentMode.Delegated)
+            return Loc.GetString("nii-terminal-assignment-delegated");
+        return Loc.GetString("nii-terminal-assignment-manual");
+    }
+
+    private void RequestAssignment()
+    {
+        if (ResearcherSelector.ItemCount == 0 ||
+            ResearcherSelector.SelectedId < 0 ||
+            ResearcherSelector.SelectedId >= _researchers.Length)
+            return;
+
+        AssignResearcherRequested?.Invoke(_researchers[ResearcherSelector.SelectedId].Entity);
     }
 
     private static string FormatCurrency(int amount)
@@ -111,6 +210,17 @@ public sealed partial class NiiDirectorTerminalWindow : FancyWindow
             NiiWorkOrderBlockReason.MachineInaccessible => "nii-work-order-block-machine-inaccessible",
             NiiWorkOrderBlockReason.EmployeeUnavailable => "nii-work-order-block-employee-unavailable",
             _ => "nii-work-order-block-none",
+        };
+    }
+
+    private static string EmployeeAvailabilityLocId(NiiEmployeeAvailability availability)
+    {
+        return availability switch
+        {
+            NiiEmployeeAvailability.Available => "nii-employee-availability-available",
+            NiiEmployeeAvailability.Busy => "nii-employee-availability-busy",
+            NiiEmployeeAvailability.Unavailable => "nii-employee-availability-unavailable",
+            _ => "nii-employee-availability-unavailable",
         };
     }
 }

@@ -1,7 +1,7 @@
 <controls:FancyWindow xmlns="https://spacestation14.io"
                       xmlns:controls="clr-namespace:Content.Client.UserInterface.Controls"
                       Title="{Loc 'nii-terminal-title'}"
-                      MinSize="460 520">
+                      MinSize="500 650">
     <ScrollContainer VerticalExpand="True">
     <BoxContainer Orientation="Vertical" Margin="12" HorizontalExpand="True">
         <Label Text="{Loc 'nii-terminal-institute-name'}"
@@ -37,6 +37,37 @@
                    StyleClasses="LabelDanger"
                    HorizontalAlignment="Center" />
         </PanelContainer>
+
+        <BoxContainer Name="LaboratoryPanel" Orientation="Vertical" HorizontalExpand="True">
+            <Label Text="{Loc 'nii-terminal-laboratory-heading'}"
+                   StyleClasses="LabelHeading"
+                   Margin="0 18 0 8" />
+
+            <GridContainer Columns="2" HorizontalExpand="True">
+                <Label Text="{Loc 'nii-terminal-laboratory-head'}" />
+                <Label Name="LaboratoryHeadValue" HorizontalAlignment="Right" />
+
+                <Label Text="{Loc 'nii-terminal-employee-status'}" />
+                <Label Name="LaboratoryHeadStatusValue" HorizontalAlignment="Right" />
+
+                <Label Text="{Loc 'nii-terminal-assignment-mode'}" />
+                <Label Name="AssignmentModeValue" HorizontalAlignment="Right" />
+            </GridContainer>
+
+            <Button Name="ToggleDelegationButton"
+                    HorizontalExpand="True"
+                    Margin="0 8 0 0" />
+
+            <Label Text="{Loc 'nii-terminal-researcher-select'}" Margin="0 10 0 4" />
+            <OptionButton Name="ResearcherSelector" HorizontalExpand="True" />
+            <Button Name="AssignResearcherButton"
+                    Text="{Loc 'nii-terminal-researcher-assign'}"
+                    HorizontalExpand="True"
+                    Margin="0 6 0 0" />
+            <Label Name="AssignmentHintValue"
+                   StyleClasses="LabelSubText"
+                   Margin="0 6 0 0" />
+        </BoxContainer>
 
         <Label Text="{Loc 'nii-terminal-project-heading'}"
                StyleClasses="LabelHeading"

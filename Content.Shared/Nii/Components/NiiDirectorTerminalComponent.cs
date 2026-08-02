@@ -38,6 +38,11 @@ public sealed class NiiDirectorTerminalBuiState : BoundUserInterfaceState
     public NiiWorkOrderStatus WorkOrderStatus { get; }
     public NiiWorkOrderBlockReason WorkOrderBlockReason { get; }
     public string AssignedEmployeeName { get; }
+    public bool HasLaboratory { get; }
+    public string LaboratoryHeadName { get; }
+    public NiiEmployeeAvailability LaboratoryHeadAvailability { get; }
+    public NiiLaboratoryAssignmentMode AssignmentMode { get; }
+    public NiiEmployeeUiState[] Researchers { get; }
     public NiiInstituteEventType[] EventLog { get; }
 
     public NiiDirectorTerminalBuiState(
@@ -58,6 +63,11 @@ public sealed class NiiDirectorTerminalBuiState : BoundUserInterfaceState
         NiiWorkOrderStatus workOrderStatus,
         NiiWorkOrderBlockReason workOrderBlockReason,
         string assignedEmployeeName,
+        bool hasLaboratory,
+        string laboratoryHeadName,
+        NiiEmployeeAvailability laboratoryHeadAvailability,
+        NiiLaboratoryAssignmentMode assignmentMode,
+        NiiEmployeeUiState[] researchers,
         NiiInstituteEventType[] eventLog)
     {
         CurrentDay = currentDay;
@@ -77,9 +87,39 @@ public sealed class NiiDirectorTerminalBuiState : BoundUserInterfaceState
         WorkOrderStatus = workOrderStatus;
         WorkOrderBlockReason = workOrderBlockReason;
         AssignedEmployeeName = assignedEmployeeName;
+        HasLaboratory = hasLaboratory;
+        LaboratoryHeadName = laboratoryHeadName;
+        LaboratoryHeadAvailability = laboratoryHeadAvailability;
+        AssignmentMode = assignmentMode;
+        Researchers = researchers;
         EventLog = eventLog;
     }
 }
 
 [Serializable, NetSerializable]
+public sealed class NiiEmployeeUiState(
+    NetEntity entity,
+    string name,
+    NiiEmployeeRole role,
+    NiiEmployeeAvailability availability)
+{
+    public NetEntity Entity { get; } = entity;
+    public string Name { get; } = name;
+    public NiiEmployeeRole Role { get; } = role;
+    public NiiEmployeeAvailability Availability { get; } = availability;
+}
+
+[Serializable, NetSerializable]
 public sealed class NiiAuthorizeResearchMessage : BoundUserInterfaceMessage;
+
+[Serializable, NetSerializable]
+public sealed class NiiAssignResearcherMessage(NetEntity employee) : BoundUserInterfaceMessage
+{
+    public NetEntity Employee { get; } = employee;
+}
+
+[Serializable, NetSerializable]
+public sealed class NiiSetDelegatedAssignmentMessage(bool enabled) : BoundUserInterfaceMessage
+{
+    public bool Enabled { get; } = enabled;
+}
