@@ -2,7 +2,7 @@
 hostname = "NII Prototype"
 soft_max_players = 1
 lobbyenabled = true
-lobbyduration = 5
+lobbyduration = 10
 defaultpreset = "NiiPrototype"
 map = "NiiPrototypeMap"
 role_timers = false
