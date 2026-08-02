@@ -5,7 +5,7 @@ meta:
   forkId: ""
   forkVersion: ""
   time: 08/02/2026 20:00:00
-  entityCount: 109
+  entityCount: 117
 maps:
 - 1
 grids:
@@ -56,6 +56,8 @@ entities:
       dampingModifier: 0.25
     - type: GridPathfinding
     - type: Gravity
+      enabled: True
+      inherent: True
       gravityShakeSound: !type:SoundPathSpecifier
         path: /Audio/Effects/alert.ogg
     - type: DecalGrid
@@ -649,5 +651,50 @@ entities:
     components:
     - type: Transform
       pos: 9.5,12.5
+      parent: 2
+- proto: AlwaysPoweredWallLight
+  entities:
+  - uid: 117
+    components:
+    - type: Transform
+      pos: 3.5,15.5
+      parent: 2
+  - uid: 118
+    components:
+    - type: Transform
+      pos: 9.5,15.5
+      parent: 2
+  - uid: 119
+    components:
+    - type: Transform
+      pos: 13.5,15.5
+      parent: 2
+  - uid: 120
+    components:
+    - type: Transform
+      rot: 3.141592653589793 rad
+      pos: 3.5,0.5
+      parent: 2
+  - uid: 121
+    components:
+    - type: Transform
+      rot: 3.141592653589793 rad
+      pos: 9.5,0.5
+      parent: 2
+  - uid: 122
+    components:
+    - type: Transform
+      rot: 3.141592653589793 rad
+      pos: 13.5,0.5
+      parent: 2
+  - uid: 123
+    components:
+    - type: Transform
+      pos: 7.5,9.5
+      parent: 2
+  - uid: 124
+    components:
+    - type: Transform
+      pos: 12.5,9.5
       parent: 2
 ...

@@ -11,6 +11,7 @@ using Content.Shared.Chemistry.EntitySystems;
 using Content.Shared.CCVar;
 using Content.Shared.GameTicking;
 using Content.Shared.FixedPoint;
+using Content.Shared.Gravity;
 using Content.Shared.Nii;
 using Content.Shared.Preferences;
 using Content.Shared.Nii.Components;
@@ -19,6 +20,7 @@ using Content.Shared.Roles.Jobs;
 using Content.Shared.Wall;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Prototypes;
+using Robust.Server.GameObjects;
 
 namespace Content.IntegrationTests.Tests.Nii;
 
@@ -67,6 +69,20 @@ public sealed class NiiPrototypeRoundTest : GameTest
         var terminalTransform = SEntMan.GetComponent<TransformComponent>(terminalUid);
         Assert.That(terminalTransform.GridUid, Is.EqualTo(playerTransform.GridUid));
         Assert.That(terminalTransform.LocalPosition, Is.EqualTo(new Vector2(2.5f, 12.5f)));
+
+        Assert.That(playerTransform.GridUid, Is.Not.Null);
+        var gravity = SEntMan.GetComponent<GravityComponent>(playerTransform.GridUid!.Value);
+        Assert.That(gravity.Enabled, Is.True);
+        Assert.That(gravity.Inherent, Is.True);
+
+        var enabledLightsOnGrid = 0;
+        var lights = SEntMan.EntityQueryEnumerator<PointLightComponent, TransformComponent>();
+        while (lights.MoveNext(out _, out var light, out var lightTransform))
+        {
+            if (light.Enabled && lightTransform.GridUid == playerTransform.GridUid)
+                enabledLightsOnGrid++;
+        }
+        Assert.That(enabledLightsOnGrid, Is.GreaterThanOrEqualTo(8));
 
         var wallCount = 0;
         var walls = SEntMan.EntityQueryEnumerator<WallComponent>();
