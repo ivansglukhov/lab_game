@@ -6,6 +6,7 @@ using Content.Server.Nii.Components;
 using Content.Shared.CCVar;
 using Content.Shared.GameTicking;
 using Content.Shared.Preferences;
+using Content.Shared.Nii.Components;
 using Content.Shared.Roles;
 using Content.Shared.Roles.Jobs;
 using Robust.Shared.Prototypes;
@@ -47,6 +48,11 @@ public sealed class NiiPrototypeRoundTest : GameTest
         var mind = mindSystem.GetMind(player!.Value);
         Assert.That(jobSystem.MindTryGetJobId(mind, out var job));
         Assert.That(job, Is.EqualTo(Director));
+
+        var terminals = SEntMan.EntityQueryEnumerator<NiiDirectorTerminalComponent>();
+        Assert.That(terminals.MoveNext(out var terminalUid, out _), Is.True);
+        Assert.That(terminalUid.IsValid(), Is.True);
+        Assert.That(terminals.MoveNext(out _, out _), Is.False);
 
         var institutes = SEntMan.EntityQueryEnumerator<NiiInstituteComponent>();
         Assert.That(institutes.MoveNext(out var instituteUid, out var institute), Is.True);

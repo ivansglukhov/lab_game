@@ -1,0 +1,45 @@
+<controls:FancyWindow xmlns="https://spacestation14.io"
+                      xmlns:controls="clr-namespace:Content.Client.UserInterface.Controls"
+                      Title="{Loc 'nii-terminal-title'}"
+                      MinSize="420 300">
+    <BoxContainer Orientation="Vertical" Margin="12">
+        <Label Text="{Loc 'nii-terminal-institute-name'}"
+               StyleClasses="LabelHeading"
+               HorizontalAlignment="Center"
+               Margin="0 0 0 12" />
+
+        <GridContainer Columns="2" HorizontalExpand="True">
+            <Label Text="{Loc 'nii-terminal-day'}" />
+            <Label Name="DayValue" HorizontalAlignment="Right" />
+
+            <Label Text="{Loc 'nii-terminal-balance'}" />
+            <Label Name="BalanceValue" HorizontalAlignment="Right" />
+
+            <Label Text="{Loc 'nii-terminal-daily-funding'}" />
+            <Label Name="FundingValue" HorizontalAlignment="Right" />
+
+            <Label Text="{Loc 'nii-terminal-daily-expenses'}" />
+            <Label Name="ExpensesValue" HorizontalAlignment="Right" />
+
+            <Label Text="{Loc 'nii-terminal-daily-result'}" />
+            <Label Name="DailyResultValue" HorizontalAlignment="Right" />
+
+            <Label Text="{Loc 'nii-terminal-reputation'}" />
+            <Label Name="ReputationValue" HorizontalAlignment="Right" />
+
+            <Label Text="{Loc 'nii-terminal-science'}" />
+            <Label Name="ScienceValue" HorizontalAlignment="Right" />
+        </GridContainer>
+
+        <PanelContainer Name="BankruptcyPanel" Visible="False" Margin="0 14 0 0">
+            <Label Text="{Loc 'nii-terminal-bankruptcy-warning'}"
+                   StyleClasses="LabelDanger"
+                   HorizontalAlignment="Center" />
+        </PanelContainer>
+
+        <Label Text="{Loc 'nii-terminal-readonly-hint'}"
+               StyleClasses="LabelSubText"
+               HorizontalAlignment="Center"
+               Margin="0 14 0 0" />
+    </BoxContainer>
+</controls:FancyWindow>

@@ -1,0 +1,24 @@
+- type: entity
+  id: NiiDirectorTerminal
+  parent: BaseStructureComputer
+  name: терминал директора НИИ
+  description: Главный интерфейс управления институтом.
+  placement:
+    mode: SnapgridCenter
+  components:
+  - type: Sprite
+    sprite: Structures/Machines/computers.rsi
+    layers:
+    - state: computer
+    - state: generic_keyboard
+    - state: rdcomp
+      shader: unshaded
+    - state: generic_keys
+  - type: Appearance
+  - type: NiiDirectorTerminal
+  - type: ActivatableUI
+    key: enum.NiiDirectorTerminalUiKey.Key
+  - type: UserInterface
+    interfaces:
+      enum.NiiDirectorTerminalUiKey.Key:
+        type: NiiDirectorTerminalBoundUserInterface

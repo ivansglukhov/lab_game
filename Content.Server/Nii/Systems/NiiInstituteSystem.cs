@@ -7,6 +7,8 @@ namespace Content.Server.Nii.Systems;
 /// </summary>
 public sealed partial class NiiInstituteSystem : EntitySystem
 {
+    [Dependency] private NiiDirectorTerminalSystem _terminals = default!;
+
     public override void Update(float frameTime)
     {
         base.Update(frameTime);
@@ -24,6 +26,7 @@ public sealed partial class NiiInstituteSystem : EntitySystem
 
             institute.ElapsedSeconds -= elapsedDays * institute.DayDurationSeconds;
             AdvanceDays(institute, elapsedDays);
+            _terminals.RefreshAll(institute);
         }
     }
 
