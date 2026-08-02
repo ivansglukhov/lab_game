@@ -40,6 +40,8 @@ public sealed partial class NiiInstituteComponent : Component
     [DataField("dayDurationSeconds")]
     public float DayDurationSeconds = 120f;
 
+    public List<EntityUid> Laboratories = [];
+
     /// <summary>
     /// Negative balance is a soft failure state and does not stop the round.
     /// </summary>

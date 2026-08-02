@@ -5,7 +5,7 @@ meta:
   forkId: ""
   forkVersion: ""
   time: 08/02/2026 20:00:00
-  entityCount: 117
+  entityCount: 120
 maps:
 - 1
 grids:
@@ -696,5 +696,26 @@ entities:
     components:
     - type: Transform
       pos: 12.5,9.5
+      parent: 2
+- proto: NiiLaboratoryState
+  entities:
+  - uid: 125
+    components:
+    - type: Transform
+      pos: 10.5,14.5
+      parent: 2
+- proto: NiiLaboratoryHead
+  entities:
+  - uid: 126
+    components:
+    - type: Transform
+      pos: 11.5,13.5
+      parent: 2
+- proto: NiiResearcher
+  entities:
+  - uid: 127
+    components:
+    - type: Transform
+      pos: 7.5,12.5
       parent: 2
 ...

@@ -7,6 +7,9 @@ namespace Content.Server.Nii.Components;
 public sealed partial class NiiResearchMachineComponent : Component
 {
     [DataField]
+    public string LaboratoryId = "main";
+
+    [DataField]
     public string SolutionName = "beaker";
 
     public bool IsProcessing;

@@ -1,0 +1,68 @@
+- type: startingGear
+  id: NiiLaboratoryHeadGear
+  equipment:
+    jumpsuit: ClothingUniformJumpsuitResearchDirector
+    shoes: ClothingShoesColorBrown
+    outerClothing: ClothingOuterCoatRD
+    id: RnDPDA
+    ears: ClothingHeadsetRD
+
+- type: startingGear
+  id: NiiResearcherGear
+  equipment:
+    jumpsuit: ClothingUniformJumpsuitScientist
+    shoes: ClothingShoesColorWhite
+    outerClothing: ClothingOuterCoatRnd
+    id: SciencePDA
+    ears: ClothingHeadsetScience
+
+- type: entity
+  id: NiiEmployeeHumanBase
+  parent: MobHuman
+  abstract: true
+  components:
+  - type: RandomHumanoidAppearance
+  - type: InputMover
+  - type: MobMover
+  - type: NpcFactionMember
+    factions:
+    - NanoTrasen
+
+- type: entity
+  id: NiiLaboratoryHead
+  parent: NiiEmployeeHumanBase
+  name: руководитель лаборатории
+  components:
+  - type: Loadout
+    prototypes:
+    - NiiLaboratoryHeadGear
+  - type: NiiEmployee
+    laboratoryId: main
+    role: LaboratoryHead
+
+- type: entity
+  id: NiiResearcher
+  parent: NiiEmployeeHumanBase
+  name: исследователь
+  components:
+  - type: Loadout
+    prototypes:
+    - NiiResearcherGear
+  - type: NiiEmployee
+    laboratoryId: main
+    role: Researcher
+
+- type: entity
+  id: NiiLaboratoryState
+  categories: [ HideSpawnMenu ]
+  name: состояние лаборатории
+  components:
+  - type: NiiLaboratory
+    laboratoryId: main
+
+- type: entity
+  id: NiiResearchWorkOrder
+  categories: [ HideSpawnMenu ]
+  name: исследовательское поручение
+  components:
+  - type: NiiResearchWorkOrder

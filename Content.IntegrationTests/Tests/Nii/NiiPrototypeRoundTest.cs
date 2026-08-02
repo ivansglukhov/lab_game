@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using System.Numerics;
 using Content.IntegrationTests.Fixtures;
 using Content.Server.Atmos.EntitySystems;
@@ -12,6 +13,8 @@ using Content.Shared.CCVar;
 using Content.Shared.GameTicking;
 using Content.Shared.FixedPoint;
 using Content.Shared.Gravity;
+using Content.Shared.Humanoid;
+using Content.Shared.Humanoid.Prototypes;
 using Content.Shared.Nii;
 using Content.Shared.Preferences;
 using Content.Shared.Nii.Components;
@@ -101,6 +104,31 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(instituteUid.IsValid(), Is.True);
         Assert.That(institute!.Balance, Is.EqualTo(500_000));
         Assert.That(institutes.MoveNext(out _, out _), Is.False);
+
+        var laboratories = SEntMan.EntityQueryEnumerator<NiiLaboratoryComponent>();
+        Assert.That(laboratories.MoveNext(out var laboratoryUid, out var laboratory), Is.True);
+        Assert.That(laboratory!.Institute, Is.EqualTo(instituteUid));
+        Assert.That(laboratory.Head, Is.Not.Null);
+        Assert.That(laboratory.Researchers, Has.Count.EqualTo(1));
+        Assert.That(laboratory.ResearchMachine, Is.Not.Null);
+        Assert.That(laboratories.MoveNext(out _, out _), Is.False);
+        Assert.That(institute.Laboratories, Is.EqualTo(new[] { laboratoryUid }));
+
+        var employees = SEntMan.EntityQueryEnumerator<NiiEmployeeComponent>();
+        var employeeRoles = new List<NiiEmployeeRole>();
+        while (employees.MoveNext(out var employeeUid, out var employee))
+        {
+            Assert.That(employee.Laboratory, Is.EqualTo(laboratoryUid));
+            Assert.That(
+                SEntMan.GetComponent<HumanoidProfileComponent>(employeeUid).Species,
+                Is.EqualTo(new ProtoId<SpeciesPrototype>("Human")));
+            employeeRoles.Add(employee.Role);
+        }
+        Assert.That(employeeRoles, Is.EquivalentTo(new[]
+        {
+            NiiEmployeeRole.LaboratoryHead,
+            NiiEmployeeRole.Researcher,
+        }));
 
         var project = Server.ProtoMan.Index(institute.ActiveProject);
         var terminalSystem = Server.System<NiiDirectorTerminalSystem>();

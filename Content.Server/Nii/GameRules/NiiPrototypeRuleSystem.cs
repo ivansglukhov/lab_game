@@ -1,4 +1,5 @@
 using Content.Server.GameTicking.Rules;
+using Content.Server.Nii.Systems;
 using Content.Shared.GameTicking.Components;
 
 namespace Content.Server.Nii.GameRules;
@@ -8,6 +9,8 @@ namespace Content.Server.Nii.GameRules;
 /// </summary>
 public sealed partial class NiiPrototypeRuleSystem : GameRuleSystem<NiiPrototypeRuleComponent>
 {
+    [Dependency] private NiiLaboratorySystem _laboratories = default!;
+
     protected override void Started(
         EntityUid uid,
         NiiPrototypeRuleComponent component,
@@ -20,6 +23,7 @@ public sealed partial class NiiPrototypeRuleSystem : GameRuleSystem<NiiPrototype
             return;
 
         component.Institute = Spawn(component.InstitutePrototype);
+        _laboratories.ReconcileNow();
     }
 
     protected override void Ended(
