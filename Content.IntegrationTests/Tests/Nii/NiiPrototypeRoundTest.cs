@@ -7,6 +7,7 @@ using Content.Server.GameTicking;
 using Content.Server.Mind;
 using Content.Server.Nii.Components;
 using Content.Server.Nii.Systems;
+using Content.Server.NPC.HTN;
 using Content.Shared.Atmos;
 using Content.Shared.Chemistry.EntitySystems;
 using Content.Shared.CCVar;
@@ -16,6 +17,7 @@ using Content.Shared.Gravity;
 using Content.Shared.Humanoid;
 using Content.Shared.Humanoid.Prototypes;
 using Content.Shared.Nii;
+using Content.Shared.NPC;
 using Content.Shared.Preferences;
 using Content.Shared.Nii.Components;
 using Content.Shared.Roles;
@@ -116,6 +118,7 @@ public sealed class NiiPrototypeRoundTest : GameTest
 
         var employees = SEntMan.EntityQueryEnumerator<NiiEmployeeComponent>();
         var employeeRoles = new List<NiiEmployeeRole>();
+        EntityUid researcherUid = default;
         while (employees.MoveNext(out var employeeUid, out var employee))
         {
             Assert.That(employee.Laboratory, Is.EqualTo(laboratoryUid));
@@ -123,12 +126,18 @@ public sealed class NiiPrototypeRoundTest : GameTest
                 SEntMan.GetComponent<HumanoidProfileComponent>(employeeUid).Species,
                 Is.EqualTo(new ProtoId<SpeciesPrototype>("Human")));
             employeeRoles.Add(employee.Role);
+            if (employee.Role == NiiEmployeeRole.Researcher)
+                researcherUid = employeeUid;
         }
         Assert.That(employeeRoles, Is.EquivalentTo(new[]
         {
             NiiEmployeeRole.LaboratoryHead,
             NiiEmployeeRole.Researcher,
         }));
+        Assert.That(researcherUid.IsValid(), Is.True);
+        Assert.That(SEntMan.HasComponent<HTNComponent>(researcherUid), Is.True);
+        Assert.That(SEntMan.HasComponent<ActiveNPCComponent>(researcherUid), Is.True);
+        var researcherStartPosition = SEntMan.GetComponent<TransformComponent>(researcherUid).LocalPosition;
 
         var project = Server.ProtoMan.Index(institute.ActiveProject);
         var terminalSystem = Server.System<NiiDirectorTerminalSystem>();
@@ -172,13 +181,22 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(samples.MoveNext(out var sampleUid, out _), Is.True);
         Assert.That(samples.MoveNext(out _, out _), Is.False);
 
-        var researchSystem = Server.System<NiiResearchMachineSystem>();
-        var machineEntity = new Entity<NiiResearchMachineComponent>(machineUid, machine!);
-        Assert.That(researchSystem.TryStartResearch(machineEntity, sampleUid, player.Value), Is.True);
-        Assert.That(institute.ResearchStatus, Is.EqualTo(NiiResearchStatus.Running));
+        for (var i = 0; i < 120 && institute.ResearchStatus == NiiResearchStatus.Authorized; i++)
+            await Pair.RunTicksSync(5);
+
+        var researcherHtn = SEntMan.GetComponent<HTNComponent>(researcherUid);
+        Assert.That(
+            institute.ResearchStatus,
+            Is.EqualTo(NiiResearchStatus.Running),
+            $"order={workOrder.Status}, block={workOrder.BlockReason}, " +
+            $"plan={researcherHtn.Plan?.CurrentOperator.GetType().Name ?? "none"}, " +
+            $"position={SEntMan.GetComponent<TransformComponent>(researcherUid).LocalPosition}");
         Assert.That(workOrder.Status, Is.EqualTo(NiiWorkOrderStatus.Running));
         Assert.That(workOrder.Machine, Is.EqualTo(machineUid));
         Assert.That(workOrder.Sample, Is.EqualTo(sampleUid));
+        Assert.That(machine!.IsProcessing, Is.True);
+        Assert.That(SEntMan.GetComponent<TransformComponent>(researcherUid).LocalPosition,
+            Is.Not.EqualTo(researcherStartPosition));
 
         var solutions = Server.System<SharedSolutionContainerSystem>();
         Assert.That(solutions.TryGetSolution(sampleUid, "beaker", out _, out var sampleSolution), Is.True);

@@ -1,0 +1,10 @@
+- type: htnCompound
+  id: NiiResearcherCompound
+  branches:
+  - tasks:
+    - !type:HTNPrimitiveTask
+      operator: !type:NiiExecuteResearchOrderOperator
+
+  - tasks:
+    - !type:HTNPrimitiveTask
+      operator: !type:NoOperator

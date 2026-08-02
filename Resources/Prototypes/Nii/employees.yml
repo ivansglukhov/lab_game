@@ -51,6 +51,12 @@
   - type: NiiEmployee
     laboratoryId: main
     role: Researcher
+  - type: HTN
+    rootTask:
+      task: NiiResearcherCompound
+    blackboard:
+      NavInteract: !type:Bool
+        true
 
 - type: entity
   id: NiiLaboratoryState
