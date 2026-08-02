@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using Content.Client.UserInterface.Systems.Chat;
 using Content.IntegrationTests.Fixtures;
 using Content.Server.Atmos.EntitySystems;
 using Content.Server.GameTicking;
@@ -28,6 +29,7 @@ using Content.Shared.Wall;
 using Robust.Shared.GameObjects;
 using Robust.Shared.Prototypes;
 using Robust.Server.GameObjects;
+using Robust.Client.UserInterface;
 
 namespace Content.IntegrationTests.Tests.Nii;
 
@@ -113,6 +115,34 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(institute.EventLog[0].SchemaVersion, Is.EqualTo(NiiInstituteNarrativeSystem.SchemaVersion));
         Assert.That(institute.AiMessages, Has.Count.EqualTo(1));
         Assert.That(institute.AiMessages[0].RelatedEventSequence, Is.EqualTo(institute.EventLog[0].Sequence));
+
+        var instituteChat = Server.System<NiiInstituteChatSystem>();
+        var directorRecipients = instituteChat.GetDirectorRecipients();
+        Assert.That(directorRecipients, Has.Count.EqualTo(1));
+        Assert.That(directorRecipients[0].UserId, Is.EqualTo(Client.User));
+
+        await Pair.RunTicksSync(2);
+        var initialNiiChatMessages = Array.Empty<string>();
+        await Client.WaitPost(() =>
+        {
+            var chat = Client.ResolveDependency<IUserInterfaceManager>().GetUIController<ChatUIController>();
+            initialNiiChatMessages = chat.History.Select(entry => entry.Msg.Message).ToArray();
+        });
+        Assert.That(initialNiiChatMessages.Count(message => message.StartsWith("[НИИ ·")), Is.EqualTo(1));
+        Assert.That(initialNiiChatMessages.Count(message => message.StartsWith("[ИИ института]")), Is.EqualTo(1));
+
+        await Server.WaitPost(() => instituteChat.SendDirectorCommand(player.Value, "Проверка команды."));
+        await Pair.RunTicksSync(2);
+        var directorCommandMessages = Array.Empty<string>();
+        await Client.WaitPost(() =>
+        {
+            var chat = Client.ResolveDependency<IUserInterfaceManager>().GetUIController<ChatUIController>();
+            directorCommandMessages = chat.History
+                .Select(entry => entry.Msg.Message)
+                .Where(message => message == "[Команда директора] Проверка команды.")
+                .ToArray();
+        });
+        Assert.That(directorCommandMessages, Has.Length.EqualTo(1));
 
         var laboratories = SEntMan.EntityQueryEnumerator<NiiLaboratoryComponent>();
         Assert.That(laboratories.MoveNext(out var laboratoryUid, out var laboratory), Is.True);

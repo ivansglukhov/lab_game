@@ -19,10 +19,6 @@ nii-terminal-reputation = Репутация
 nii-terminal-science = Научный результат
 nii-terminal-bankruptcy-warning = ВНИМАНИЕ: институт неплатёжеспособен
 nii-terminal-currency = { $amount } ₽
-nii-terminal-ai-heading = ИИ института
-nii-ai-kind-report = Информационный отчёт
-nii-ai-kind-alert = Внимание
-nii-ai-kind-success = Успех
 nii-terminal-laboratory-heading = Лаборатория
 nii-terminal-laboratory-head = Руководитель лаборатории
 nii-terminal-employee-status = Состояние
@@ -51,7 +47,6 @@ nii-terminal-project-duration = Время работы
 nii-terminal-project-authorize = Утвердить финансирование проекта
 nii-terminal-project-reagent-value = плазма, { $amount } ед.
 nii-terminal-project-duration-value = { $seconds } сек.
-nii-terminal-event-log = Журнал института
 nii-terminal-work-order-heading = Поручение лаборатории
 nii-terminal-work-order-status = Состояние поручения
 nii-terminal-work-order-assignee = Исполнитель
@@ -99,6 +94,15 @@ nii-event-work-order-blocked = Поручение остановлено. При
 nii-event-work-order-recovered = Условия для продолжения поручения восстановлены.
 nii-event-employee-unavailable = Сотрудник { $employee } стал недоступен.
 nii-event-time = День { $day }, { $time }
+
+nii-chat-institute-message = [НИИ · день { $day }, { $time }] { $message }
+nii-chat-ai-message = [ИИ института] { $message }
+nii-chat-director-command = [Команда директора] { $command }
+
+nii-command-authorize-project = Утвердить финансирование исследовательского проекта.
+nii-command-assign-researcher = Назначить исполнителем сотрудника { $employee }.
+nii-command-enable-delegation = Передать руководителю лаборатории распределение поручений.
+nii-command-disable-delegation = Вернуть ручное распределение поручений директору.
 
 nii-ai-institute-started = Институт запущен. Все доступные системы находятся под наблюдением.
 nii-ai-financial-warning = Внимание: баланс института отрицательный и составляет { $amount } ₽.

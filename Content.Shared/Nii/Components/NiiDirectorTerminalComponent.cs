@@ -43,8 +43,6 @@ public sealed class NiiDirectorTerminalBuiState : BoundUserInterfaceState
     public NiiEmployeeAvailability LaboratoryHeadAvailability { get; }
     public NiiLaboratoryAssignmentMode AssignmentMode { get; }
     public NiiEmployeeUiState[] Researchers { get; }
-    public NiiInstituteEventState[] EventLog { get; }
-    public NiiAiMessageState[] AiMessages { get; }
 
     public NiiDirectorTerminalBuiState(
         int currentDay,
@@ -68,9 +66,7 @@ public sealed class NiiDirectorTerminalBuiState : BoundUserInterfaceState
         string laboratoryHeadName,
         NiiEmployeeAvailability laboratoryHeadAvailability,
         NiiLaboratoryAssignmentMode assignmentMode,
-        NiiEmployeeUiState[] researchers,
-        NiiInstituteEventState[] eventLog,
-        NiiAiMessageState[] aiMessages)
+        NiiEmployeeUiState[] researchers)
     {
         CurrentDay = currentDay;
         Balance = balance;
@@ -94,8 +90,6 @@ public sealed class NiiDirectorTerminalBuiState : BoundUserInterfaceState
         LaboratoryHeadAvailability = laboratoryHeadAvailability;
         AssignmentMode = assignmentMode;
         Researchers = researchers;
-        EventLog = eventLog;
-        AiMessages = aiMessages;
     }
 }
 

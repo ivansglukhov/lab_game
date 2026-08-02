@@ -19,6 +19,7 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
     [Dependency] private IPrototypeManager _prototypes = default!;
     [Dependency] private NiiResearchWorkOrderSystem _workOrders = default!;
     [Dependency] private NiiInstituteNarrativeSystem _narrative = default!;
+    [Dependency] private NiiInstituteChatSystem _chat = default!;
 
     public override void Initialize()
     {
@@ -83,6 +84,7 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
         if (!query.MoveNext(out var instituteUid, out var institute))
             return;
 
+        _chat.SendDirectorCommand(args.Actor, Loc.GetString("nii-command-authorize-project"));
         TryAuthorizeResearch((instituteUid, institute), args.Actor);
     }
 
@@ -95,6 +97,9 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
             !TryGetInstitute(out var instituteUid, out var institute))
             return;
 
+        _chat.SendDirectorCommand(
+            args.Actor,
+            Loc.GetString("nii-command-assign-researcher", ("employee", MetaData(employeeUid.Value).EntityName)));
         TryAssignResearcher((instituteUid, institute), employeeUid.Value);
     }
 
@@ -106,6 +111,11 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
             !TryGetInstitute(out var instituteUid, out var institute))
             return;
 
+        _chat.SendDirectorCommand(
+            args.Actor,
+            Loc.GetString(args.Enabled
+                ? "nii-command-enable-delegation"
+                : "nii-command-disable-delegation"));
         TrySetDelegatedAssignment((instituteUid, institute), args.Enabled, args.Actor);
     }
 
@@ -270,9 +280,7 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
                 headName,
                 headAvailability,
                 assignmentMode,
-                researchers,
-                institute.EventLog.TakeLast(6).ToArray(),
-                institute.AiMessages.TakeLast(4).ToArray()));
+                researchers));
     }
 
     private bool TryGetInstitute(out EntityUid uid, out NiiInstituteComponent institute)

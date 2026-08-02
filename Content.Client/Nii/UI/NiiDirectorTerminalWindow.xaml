@@ -1,7 +1,7 @@
 <controls:FancyWindow xmlns="https://spacestation14.io"
                       xmlns:controls="clr-namespace:Content.Client.UserInterface.Controls"
                       Title="{Loc 'nii-terminal-title'}"
-                      MinSize="500 650">
+                      MinSize="500 560">
     <ScrollContainer VerticalExpand="True">
     <BoxContainer Orientation="Vertical" Margin="12" HorizontalExpand="True">
         <Label Text="{Loc 'nii-terminal-institute-name'}"
@@ -37,19 +37,6 @@
                    StyleClasses="LabelDanger"
                    HorizontalAlignment="Center" />
         </PanelContainer>
-
-        <BoxContainer Name="AiPanel" Orientation="Vertical" HorizontalExpand="True">
-            <Label Text="{Loc 'nii-terminal-ai-heading'}"
-                   StyleClasses="LabelHeading"
-                   Margin="0 18 0 8" />
-            <PanelContainer Name="AiLatestPanel" HorizontalExpand="True">
-                <BoxContainer Orientation="Vertical" Margin="8">
-                    <Label Name="AiLatestKindValue" StyleClasses="LabelSubText" />
-                    <Label Name="AiLatestTextValue" HorizontalExpand="True" />
-                </BoxContainer>
-            </PanelContainer>
-            <Label Name="AiHistoryValue" StyleClasses="LabelSubText" Margin="0 6 0 0" />
-        </BoxContainer>
 
         <BoxContainer Name="LaboratoryPanel" Orientation="Vertical" HorizontalExpand="True">
             <Label Text="{Loc 'nii-terminal-laboratory-heading'}"
@@ -122,10 +109,6 @@
             <Label Name="WorkOrderBlockValue" HorizontalAlignment="Right" />
         </GridContainer>
 
-        <Label Text="{Loc 'nii-terminal-event-log'}"
-               StyleClasses="LabelHeading"
-               Margin="0 18 0 6" />
-        <Label Name="EventLogValue" StyleClasses="LabelSubText" />
     </BoxContainer>
     </ScrollContainer>
 </controls:FancyWindow>

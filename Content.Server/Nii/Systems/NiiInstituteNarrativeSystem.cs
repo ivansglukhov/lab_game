@@ -13,6 +13,8 @@ public sealed partial class NiiInstituteNarrativeSystem : EntitySystem
     public const int MaximumEventEntries = 64;
     public const int MaximumAiMessageEntries = 12;
 
+    [Dependency] private NiiInstituteChatSystem _chat = default!;
+
     public NiiInstituteEventState Record(
         Entity<NiiInstituteComponent> institute,
         NiiInstituteEventType type,
@@ -46,6 +48,7 @@ public sealed partial class NiiInstituteNarrativeSystem : EntitySystem
 
         institute.Comp.EventLog.Add(eventState);
         TrimOldest(institute.Comp.EventLog, MaximumEventEntries);
+        _chat.SendEvent(eventState);
 
         if (NarratorText(type, actorName, data) is { } narratorText)
         {
@@ -55,7 +58,7 @@ public sealed partial class NiiInstituteNarrativeSystem : EntitySystem
                 NiiInstituteEventSeverity.Success => NiiAiMessageKind.Success,
                 _ => NiiAiMessageKind.Report,
             };
-            institute.Comp.AiMessages.Add(new NiiAiMessageState(
+            var aiMessage = new NiiAiMessageState(
                 SchemaVersion,
                 institute.Comp.NextAiMessageSequence++,
                 eventState.Sequence,
@@ -63,8 +66,10 @@ public sealed partial class NiiInstituteNarrativeSystem : EntitySystem
                 eventState.SecondsIntoDay,
                 kind,
                 severity,
-                narratorText));
+                narratorText);
+            institute.Comp.AiMessages.Add(aiMessage);
             TrimOldest(institute.Comp.AiMessages, MaximumAiMessageEntries);
+            _chat.SendAiMessage(aiMessage);
         }
 
         return eventState;
