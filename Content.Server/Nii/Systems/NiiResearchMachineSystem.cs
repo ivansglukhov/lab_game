@@ -18,6 +18,7 @@ public sealed partial class NiiResearchMachineSystem : EntitySystem
     [Dependency] private SharedPopupSystem _popup = default!;
     [Dependency] private NiiDirectorTerminalSystem _terminals = default!;
     [Dependency] private NiiResearchWorkOrderSystem _workOrders = default!;
+    [Dependency] private NiiInstituteNarrativeSystem _narrative = default!;
 
     public override void Initialize()
     {
@@ -41,7 +42,7 @@ public sealed partial class NiiResearchMachineSystem : EntitySystem
             if (machine.ElapsedSeconds < project.DurationSeconds)
                 continue;
 
-            CompleteResearch(uid, machine, institute, project);
+            CompleteResearch(uid, machine, (instituteUid, institute), project);
         }
     }
 
@@ -96,7 +97,15 @@ public sealed partial class NiiResearchMachineSystem : EntitySystem
         machine.Comp.Institute = instituteUid;
         institute.ResearchStatus = NiiResearchStatus.Running;
         _workOrders.MarkRunning((workOrderUid, workOrder));
-        NiiInstituteSystem.AddEvent(institute, NiiInstituteEventType.ResearchStarted);
+        _narrative.Record(
+            (instituteUid, institute),
+            NiiInstituteEventType.ResearchStarted,
+            NiiInstituteEventSeverity.Info,
+            new NiiInstituteEventData(
+                user,
+                workOrderUid,
+                machine.Comp.LaboratoryId,
+                NiiWorkOrderStatus.Running));
         _terminals.RefreshAll(institute);
         _popup.PopupEntity(Loc.GetString("nii-research-machine-started"), machine, user);
         return true;
@@ -105,20 +114,34 @@ public sealed partial class NiiResearchMachineSystem : EntitySystem
     private void CompleteResearch(
         EntityUid uid,
         NiiResearchMachineComponent machine,
-        NiiInstituteComponent institute,
+        Entity<NiiInstituteComponent> institute,
         NiiResearchProjectPrototype project)
     {
         machine.IsProcessing = false;
         machine.ElapsedSeconds = 0f;
         machine.Institute = null;
-        institute.ResearchStatus = NiiResearchStatus.Completed;
-        institute.Science += project.ScienceReward;
-        institute.Reputation += project.ReputationReward;
-        NiiInstituteSystem.AddEvent(institute, NiiInstituteEventType.ResearchCompleted);
-        if (institute.ActiveWorkOrder is { } workOrderUid &&
-            TryComp<NiiResearchWorkOrderComponent>(workOrderUid, out var workOrder))
-            _workOrders.Complete((workOrderUid, workOrder));
+        institute.Comp.ResearchStatus = NiiResearchStatus.Completed;
+        institute.Comp.Science += project.ScienceReward;
+        institute.Comp.Reputation += project.ReputationReward;
+        EntityUid? workOrderUid = institute.Comp.ActiveWorkOrder;
+        EntityUid? assignedTo = null;
+        if (workOrderUid is { } activeOrder &&
+            TryComp<NiiResearchWorkOrderComponent>(activeOrder, out var activeWorkOrder))
+            assignedTo = activeWorkOrder.AssignedTo;
+        if (workOrderUid is { } completedOrderUid &&
+            TryComp<NiiResearchWorkOrderComponent>(completedOrderUid, out var workOrder))
+            _workOrders.Complete((completedOrderUid, workOrder));
+        _narrative.Record(
+            institute,
+            NiiInstituteEventType.ResearchCompleted,
+            NiiInstituteEventSeverity.Success,
+            new NiiInstituteEventData(
+                assignedTo,
+                workOrderUid,
+                machine.LaboratoryId,
+                NiiWorkOrderStatus.Completed,
+                Amount: project.ScienceReward));
         Spawn(project.ResultPrototype, Transform(uid).Coordinates);
-        _terminals.RefreshAll(institute);
+        _terminals.RefreshAll(institute.Comp);
     }
 }

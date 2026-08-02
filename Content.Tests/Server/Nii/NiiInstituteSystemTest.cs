@@ -1,7 +1,6 @@
 using System;
 using Content.Server.Nii.Components;
 using Content.Server.Nii.Systems;
-using Content.Shared.Nii;
 using NUnit.Framework;
 
 namespace Content.Tests.Server.Nii;
@@ -49,18 +48,4 @@ public sealed class NiiInstituteSystemTest
         Assert.Throws<ArgumentOutOfRangeException>(() => NiiInstituteSystem.AdvanceDays(institute, -1));
     }
 
-    [Test]
-    public void EventLogKeepsOnlyTheSixNewestEntries()
-    {
-        var institute = new NiiInstituteComponent();
-
-        for (var i = 0; i < 8; i++)
-            NiiInstituteSystem.AddEvent(institute, NiiInstituteEventType.ResearchStarted);
-
-        using (Assert.EnterMultipleScope())
-        {
-            Assert.That(institute.EventLog, Has.Count.EqualTo(6));
-            Assert.That(institute.EventLog, Has.All.EqualTo(NiiInstituteEventType.ResearchStarted));
-        }
-    }
 }

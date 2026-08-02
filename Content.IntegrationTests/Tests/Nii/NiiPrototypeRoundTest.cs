@@ -1,10 +1,12 @@
 #nullable enable
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using Content.IntegrationTests.Fixtures;
 using Content.Server.Atmos.EntitySystems;
 using Content.Server.GameTicking;
 using Content.Server.Mind;
+using Content.Server.Nii.AI;
 using Content.Server.Nii.Components;
 using Content.Server.Nii.Systems;
 using Content.Server.NPC.HTN;
@@ -106,6 +108,11 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(instituteUid.IsValid(), Is.True);
         Assert.That(institute!.Balance, Is.EqualTo(500_000));
         Assert.That(institutes.MoveNext(out _, out _), Is.False);
+        Assert.That(institute.EventLog, Has.Count.EqualTo(1));
+        Assert.That(institute.EventLog[0].Type, Is.EqualTo(NiiInstituteEventType.InstituteStarted));
+        Assert.That(institute.EventLog[0].SchemaVersion, Is.EqualTo(NiiInstituteNarrativeSystem.SchemaVersion));
+        Assert.That(institute.AiMessages, Has.Count.EqualTo(1));
+        Assert.That(institute.AiMessages[0].RelatedEventSequence, Is.EqualTo(institute.EventLog[0].Sequence));
 
         var laboratories = SEntMan.EntityQueryEnumerator<NiiLaboratoryComponent>();
         Assert.That(laboratories.MoveNext(out var laboratoryUid, out var laboratory), Is.True);
@@ -115,6 +122,22 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(laboratory.ResearchMachine, Is.Not.Null);
         Assert.That(laboratories.MoveNext(out _, out _), Is.False);
         Assert.That(institute.Laboratories, Is.EqualTo(new[] { laboratoryUid }));
+
+        var contextSystem = Server.System<NiiInstituteAiContextSystem>();
+        var initialContext = contextSystem.Build((instituteUid, institute));
+        Assert.That(initialContext.Authority, Is.EqualTo(NiiInstituteAiContextSystem.Authority));
+        Assert.That(initialContext.Laboratories, Has.Length.EqualTo(1));
+        Assert.That(initialContext.Laboratories[0].Employees, Has.Length.EqualTo(3));
+        Assert.That(initialContext.Laboratories[0].Sensors.AtmosphereAvailable, Is.True);
+        Assert.That(initialContext.Laboratories[0].Sensors.PressureKpa, Is.GreaterThan(0f));
+        Assert.That(initialContext.Laboratories[0].Sensors.OxygenMoles, Is.GreaterThan(0f));
+        Assert.That(initialContext.Laboratories[0].Sensors.GravityEnabled, Is.True);
+        Assert.That(initialContext.Laboratories[0].Sensors.EnabledLights, Is.GreaterThanOrEqualTo(8));
+        var initialContextJson = contextSystem.Serialize(initialContext);
+        Assert.That(initialContextJson, Does.Not.Contain("EntityUid"));
+        Assert.That(initialContextJson, Does.Contain("\"authority\":\"observe_only\""));
+        Assert.That(initialContextJson, Does.Contain("\"researchStatus\":\"available\""));
+        Assert.That(initialContextJson.Length, Is.LessThan(16_384));
 
         var employees = SEntMan.EntityQueryEnumerator<NiiEmployeeComponent>();
         var employeeRoles = new List<NiiEmployeeRole>();
@@ -149,6 +172,12 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(authorized, Is.True);
         Assert.That(institute.ResearchStatus, Is.EqualTo(NiiResearchStatus.Authorized));
         Assert.That(institute.Balance, Is.EqualTo(500_000 - project.Cost));
+        Assert.That(institute.EventLog.Count(eventState =>
+            eventState.Type == NiiInstituteEventType.WorkOrderCreated), Is.EqualTo(1));
+        Assert.That(institute.EventLog.Count(eventState =>
+            eventState.Type == NiiInstituteEventType.ProjectAuthorized), Is.EqualTo(1));
+        Assert.That(institute.AiMessages[^1].RelatedEventSequence,
+            Is.EqualTo(institute.EventLog[^1].Sequence));
         await Server.WaitPost(() => authorized = terminalSystem.TryAuthorizeResearch((instituteUid, institute)));
         Assert.That(authorized, Is.False);
         Assert.That(institute.Balance, Is.EqualTo(500_000 - project.Cost));
@@ -177,6 +206,10 @@ public sealed class NiiPrototypeRoundTest : GameTest
             (instituteUid, institute), researcherUid));
         Assert.That(assigned, Is.True);
         Assert.That(workOrder.AssignedTo, Is.EqualTo(researcherUid));
+        var assignmentEvent = institute.EventLog.Last(eventState =>
+            eventState.Type == NiiInstituteEventType.EmployeeAssigned);
+        Assert.That(assignmentEvent.ActorName, Is.EqualTo(SEntMan.GetComponent<MetaDataComponent>(researcherUid).EntityName));
+        Assert.That(assignmentEvent.ActorId, Is.Not.Empty);
         Assert.That(workOrder.Machine, Is.EqualTo(laboratory.ResearchMachine));
         Assert.That(workOrder.Sample, Is.Not.Null);
         Assert.That(workOrder.Status, Is.EqualTo(NiiWorkOrderStatus.FetchingSample));
@@ -189,9 +222,13 @@ public sealed class NiiPrototypeRoundTest : GameTest
         workOrderSystem.Block(workOrderEntity, NiiWorkOrderBlockReason.NoSample);
         Assert.That(workOrder.Status, Is.EqualTo(NiiWorkOrderStatus.Blocked));
         Assert.That(workOrder.BlockReason, Is.EqualTo(NiiWorkOrderBlockReason.NoSample));
+        Assert.That(institute.EventLog.Count(eventState =>
+            eventState.Type == NiiInstituteEventType.ResourceShortage), Is.EqualTo(1));
         Assert.That(workOrderSystem.TryReserveSample(workOrderEntity), Is.True);
         Assert.That(workOrder.Status, Is.EqualTo(NiiWorkOrderStatus.FetchingSample));
         Assert.That(workOrder.BlockReason, Is.EqualTo(NiiWorkOrderBlockReason.None));
+        Assert.That(institute.EventLog.Count(eventState =>
+            eventState.Type == NiiInstituteEventType.WorkOrderRecovered), Is.EqualTo(1));
 
         var machines = SEntMan.EntityQueryEnumerator<NiiResearchMachineComponent>();
         Assert.That(machines.MoveNext(out var machineUid, out var machine), Is.True);
@@ -215,6 +252,10 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(workOrder.Machine, Is.EqualTo(machineUid));
         Assert.That(workOrder.Sample, Is.EqualTo(sampleUid));
         Assert.That(machine!.IsProcessing, Is.True);
+        Assert.That(institute.EventLog.Count(eventState =>
+            eventState.Type == NiiInstituteEventType.SampleDeliveryStarted), Is.EqualTo(1));
+        Assert.That(institute.EventLog.Count(eventState =>
+            eventState.Type == NiiInstituteEventType.ResearchStarted), Is.EqualTo(1));
         Assert.That(SEntMan.GetComponent<TransformComponent>(researcherUid).LocalPosition,
             Is.Not.EqualTo(researcherStartPosition));
 
@@ -232,6 +273,9 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(SEntMan.GetComponent<NiiEmployeeComponent>(workOrder.AssignedTo!.Value).ActiveWorkOrder, Is.Null);
         Assert.That(institute.Science, Is.EqualTo(project.ScienceReward));
         Assert.That(institute.Reputation, Is.EqualTo(project.ReputationReward));
+        Assert.That(institute.EventLog.Count(eventState =>
+            eventState.Type == NiiInstituteEventType.ResearchCompleted), Is.EqualTo(1));
+        Assert.That(institute.AiMessages[^1].Kind, Is.EqualTo(NiiAiMessageKind.Success));
 
         var delegationChanged = false;
         await Server.WaitPost(() => delegationChanged = terminalSystem.TrySetDelegatedAssignment(
@@ -261,6 +305,31 @@ public sealed class NiiPrototypeRoundTest : GameTest
         await Pair.RunTicksSync(2);
         Assert.That(institute.CurrentDay, Is.GreaterThan(1));
         Assert.That(institute.Balance, Is.EqualTo(balanceBeforeDays - 25_000 * (institute.CurrentDay - 1)));
+
+        var sequences = institute.EventLog.Select(eventState => eventState.Sequence).ToArray();
+        Assert.That(sequences, Is.Ordered.Ascending);
+        Assert.That(sequences.Distinct().Count(), Is.EqualTo(sequences.Length));
+        Assert.That(institute.EventLog.Any(eventState => eventState.Type == NiiInstituteEventType.DayAdvanced), Is.True);
+
+        var narrative = Server.System<NiiInstituteNarrativeSystem>();
+        var balanceBeforeNarration = institute.Balance;
+        await Server.WaitPost(() =>
+        {
+            for (var i = 0; i < NiiInstituteNarrativeSystem.MaximumEventEntries + 8; i++)
+            {
+                narrative.Record(
+                    (instituteUid, institute),
+                    NiiInstituteEventType.ResearchCompleted,
+                    NiiInstituteEventSeverity.Success,
+                    new NiiInstituteEventData(Amount: i));
+            }
+        });
+        Assert.That(institute.Balance, Is.EqualTo(balanceBeforeNarration));
+        Assert.That(institute.EventLog, Has.Count.EqualTo(NiiInstituteNarrativeSystem.MaximumEventEntries));
+        Assert.That(institute.AiMessages, Has.Count.EqualTo(NiiInstituteNarrativeSystem.MaximumAiMessageEntries));
+        var boundedContext = contextSystem.Build((instituteUid, institute));
+        Assert.That(boundedContext.RecentEvents, Has.Length.EqualTo(NiiInstituteAiContextSystem.MaximumRecentEvents));
+        Assert.That(contextSystem.Serialize(boundedContext).Length, Is.LessThan(16_384));
 
         await Server.WaitPost(() => ticker.RestartRound());
     }

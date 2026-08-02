@@ -64,8 +64,29 @@ public sealed partial class NiiDirectorTerminalWindow : FancyWindow
         WorkOrderBlockValue.Text = isBlocked
             ? Loc.GetString(WorkOrderBlockReasonLocId(state.WorkOrderBlockReason))
             : string.Empty;
+        UpdateAiMessages(state.AiMessages);
         UpdateLaboratory(state);
         EventLogValue.Text = string.Join("\n", state.EventLog.Select(EventText));
+    }
+
+    private void UpdateAiMessages(NiiAiMessageState[] messages)
+    {
+        AiPanel.Visible = messages.Length > 0;
+        if (messages.Length == 0)
+            return;
+
+        var latest = messages[^1];
+        AiLatestKindValue.Text = Loc.GetString(latest.Kind switch
+        {
+            NiiAiMessageKind.Alert => "nii-ai-kind-alert",
+            NiiAiMessageKind.Success => "nii-ai-kind-success",
+            _ => "nii-ai-kind-report",
+        });
+        AiLatestTextValue.Text = latest.Text;
+        AiHistoryValue.Text = string.Join(
+            "\n",
+            messages.Take(messages.Length - 1).Select(message =>
+                $"{FormatEventTime(message.Day, message.SecondsIntoDay)} — {message.Text}"));
     }
 
     private void UpdateLaboratory(NiiDirectorTerminalBuiState state)
@@ -169,18 +190,16 @@ public sealed partial class NiiDirectorTerminalWindow : FancyWindow
         };
     }
 
-    private static string EventText(NiiInstituteEventType eventType)
+    private static string EventText(NiiInstituteEventState eventState)
     {
-        var locId = eventType switch
-        {
-            NiiInstituteEventType.InstituteStarted => "nii-event-institute-started",
-            NiiInstituteEventType.ProjectAuthorized => "nii-event-project-authorized",
-            NiiInstituteEventType.ResearchStarted => "nii-event-research-started",
-            NiiInstituteEventType.ResearchCompleted => "nii-event-research-completed",
-            _ => "nii-event-institute-started",
-        };
+        return $"{FormatEventTime(eventState.Day, eventState.SecondsIntoDay)} — {eventState.Message}";
+    }
 
-        return $"- {Loc.GetString(locId)}";
+    private static string FormatEventTime(int day, int secondsIntoDay)
+    {
+        var hours = secondsIntoDay / 3600;
+        var minutes = secondsIntoDay % 3600 / 60;
+        return Loc.GetString("nii-event-time", ("day", day), ("time", $"{hours:00}:{minutes:00}"));
     }
 
     private static string WorkOrderStatusLocId(NiiWorkOrderStatus status)

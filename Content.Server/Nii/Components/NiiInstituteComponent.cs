@@ -31,8 +31,13 @@ public sealed partial class NiiInstituteComponent : Component
     [DataField("researchStatus")]
     public NiiResearchStatus ResearchStatus = NiiResearchStatus.Available;
 
-    [DataField("eventLog")]
-    public List<NiiInstituteEventType> EventLog = [NiiInstituteEventType.InstituteStarted];
+    public List<NiiInstituteEventState> EventLog = [];
+
+    public List<NiiAiMessageState> AiMessages = [];
+
+    public ulong NextEventSequence = 1;
+
+    public ulong NextAiMessageSequence = 1;
 
     [DataField("currentDay")]
     public int CurrentDay = 1;

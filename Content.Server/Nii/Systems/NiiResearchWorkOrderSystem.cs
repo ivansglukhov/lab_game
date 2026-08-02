@@ -12,6 +12,8 @@ namespace Content.Server.Nii.Systems;
 /// </summary>
 public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
 {
+    [Dependency] private NiiInstituteNarrativeSystem _narrative = default!;
+
     private bool _sampleReconciliationQueued;
 
     public override void Initialize()
@@ -70,6 +72,11 @@ public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
 
             institute.Comp.ActiveWorkOrder = orderUid;
             laboratory.ActiveWorkOrder = orderUid;
+            RecordOrderEvent(
+                (orderUid, order),
+                NiiInstituteEventType.WorkOrderCreated,
+                NiiInstituteEventSeverity.Info,
+                requestedBy);
             NotifyChanged((orderUid, order));
             return orderUid;
         }
@@ -98,6 +105,11 @@ public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
         order.Comp.AssignedTo = researcherUid;
         researcher.ActiveWorkOrder = order.Owner;
         order.Comp.Status = NiiWorkOrderStatus.Assigned;
+        RecordOrderEvent(
+            order,
+            NiiInstituteEventType.EmployeeAssigned,
+            NiiInstituteEventSeverity.Info,
+            researcherUid);
 
         if (laboratory.Comp.ResearchMachine is not { } machineUid || Deleted(machineUid))
         {
@@ -144,6 +156,7 @@ public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
 
     public bool TryReserveSample(Entity<NiiResearchWorkOrderComponent> order)
     {
+        var wasBlocked = order.Comp.Status == NiiWorkOrderStatus.Blocked;
         var sampleQuery = EntityQueryEnumerator<NiiResearchSampleComponent>();
         while (sampleQuery.MoveNext(out var sampleUid, out _))
         {
@@ -154,6 +167,19 @@ public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
             order.Comp.Sample = sampleUid;
             order.Comp.BlockReason = NiiWorkOrderBlockReason.None;
             order.Comp.Status = NiiWorkOrderStatus.FetchingSample;
+            if (wasBlocked)
+            {
+                RecordOrderEvent(
+                    order,
+                    NiiInstituteEventType.WorkOrderRecovered,
+                    NiiInstituteEventSeverity.Info,
+                    order.Comp.AssignedTo);
+            }
+            RecordOrderEvent(
+                order,
+                NiiInstituteEventType.SampleReserved,
+                NiiInstituteEventSeverity.Info,
+                order.Comp.AssignedTo);
             NotifyChanged(order);
             return true;
         }
@@ -171,16 +197,29 @@ public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
             order.Comp.AssignedTo is not { Valid: true })
             return false;
 
+        if (order.Comp.Status == NiiWorkOrderStatus.DeliveringSample &&
+            order.Comp.Sample == sample &&
+            order.Comp.Machine == machine)
+            return true;
+
         order.Comp.Sample = sample;
         order.Comp.Machine = machine;
         order.Comp.BlockReason = NiiWorkOrderBlockReason.None;
         order.Comp.Status = NiiWorkOrderStatus.DeliveringSample;
+        RecordOrderEvent(
+            order,
+            NiiInstituteEventType.SampleDeliveryStarted,
+            NiiInstituteEventSeverity.Info,
+            order.Comp.AssignedTo);
         NotifyChanged(order);
         return true;
     }
 
     public void MarkRunning(Entity<NiiResearchWorkOrderComponent> order)
     {
+        if (order.Comp.Status == NiiWorkOrderStatus.Running)
+            return;
+
         order.Comp.BlockReason = NiiWorkOrderBlockReason.None;
         order.Comp.Status = NiiWorkOrderStatus.Running;
         NotifyChanged(order);
@@ -188,6 +227,9 @@ public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
 
     public void Complete(Entity<NiiResearchWorkOrderComponent> order)
     {
+        if (order.Comp.Status == NiiWorkOrderStatus.Completed)
+            return;
+
         order.Comp.BlockReason = NiiWorkOrderBlockReason.None;
         order.Comp.Status = NiiWorkOrderStatus.Completed;
 
@@ -216,8 +258,20 @@ public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
         Entity<NiiResearchWorkOrderComponent> order,
         NiiWorkOrderBlockReason reason)
     {
+        if (order.Comp.Status == NiiWorkOrderStatus.Blocked && order.Comp.BlockReason == reason)
+            return;
+
         order.Comp.Status = NiiWorkOrderStatus.Blocked;
         order.Comp.BlockReason = reason;
+        RecordOrderEvent(
+            order,
+            reason == NiiWorkOrderBlockReason.NoSample
+                ? NiiInstituteEventType.ResourceShortage
+                : NiiInstituteEventType.WorkOrderBlocked,
+            reason == NiiWorkOrderBlockReason.EmployeeUnavailable
+                ? NiiInstituteEventSeverity.Critical
+                : NiiInstituteEventSeverity.Attention,
+            order.Comp.AssignedTo);
         NotifyChanged(order);
     }
 
@@ -243,6 +297,32 @@ public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
     {
         var ev = new NiiWorkOrderChangedEvent();
         RaiseLocalEvent(order.Owner, ref ev);
+    }
+
+    private void RecordOrderEvent(
+        Entity<NiiResearchWorkOrderComponent> order,
+        NiiInstituteEventType type,
+        NiiInstituteEventSeverity severity,
+        EntityUid? actor)
+    {
+        if (order.Comp.Institute is not { } instituteUid ||
+            !TryComp<NiiInstituteComponent>(instituteUid, out var institute))
+            return;
+
+        var laboratoryId = order.Comp.Laboratory is { } laboratoryUid &&
+                           TryComp<NiiLaboratoryComponent>(laboratoryUid, out var laboratory)
+            ? laboratory.LaboratoryId
+            : string.Empty;
+        _narrative.Record(
+            (instituteUid, institute),
+            type,
+            severity,
+            new NiiInstituteEventData(
+                actor,
+                order.Owner,
+                laboratoryId,
+                order.Comp.Status,
+                order.Comp.BlockReason));
     }
 }
 

@@ -18,6 +18,7 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
     [Dependency] private UserInterfaceSystem _ui = default!;
     [Dependency] private IPrototypeManager _prototypes = default!;
     [Dependency] private NiiResearchWorkOrderSystem _workOrders = default!;
+    [Dependency] private NiiInstituteNarrativeSystem _narrative = default!;
 
     public override void Initialize()
     {
@@ -45,7 +46,21 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
             TryComp<NiiLaboratoryComponent>(laboratoryUid, out var laboratory) &&
             laboratory.Institute is { } instituteUid &&
             TryComp<NiiInstituteComponent>(instituteUid, out var institute))
+        {
+            if (args.OldMobState == MobState.Alive && args.NewMobState != MobState.Alive)
+            {
+                _narrative.Record(
+                    (instituteUid, institute),
+                    NiiInstituteEventType.EmployeeUnavailable,
+                    NiiInstituteEventSeverity.Critical,
+                    new NiiInstituteEventData(
+                        employee.Owner,
+                        employee.Comp.ActiveWorkOrder,
+                        laboratory.LaboratoryId,
+                        BlockReason: NiiWorkOrderBlockReason.EmployeeUnavailable));
+            }
             RefreshAll(institute);
+        }
     }
 
     private void OnWorkOrderChanged(
@@ -91,7 +106,7 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
             !TryGetInstitute(out var instituteUid, out var institute))
             return;
 
-        TrySetDelegatedAssignment((instituteUid, institute), args.Enabled);
+        TrySetDelegatedAssignment((instituteUid, institute), args.Enabled, args.Actor);
     }
 
     public bool TryAssignResearcher(
@@ -109,7 +124,8 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
 
     public bool TrySetDelegatedAssignment(
         Entity<NiiInstituteComponent> institute,
-        bool enabled)
+        bool enabled,
+        EntityUid? requestedBy = null)
     {
         if (!TryGetPrimaryLaboratory(institute.Comp, out var laboratoryUid, out var laboratory))
             return false;
@@ -119,9 +135,23 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
              _workOrders.GetAvailability(headUid) != NiiEmployeeAvailability.Available))
             return false;
 
-        laboratory.AssignmentMode = enabled
+        var newMode = enabled
             ? NiiLaboratoryAssignmentMode.Delegated
             : NiiLaboratoryAssignmentMode.Manual;
+        var modeChanged = laboratory.AssignmentMode != newMode;
+        laboratory.AssignmentMode = newMode;
+
+        if (modeChanged)
+        {
+            _narrative.Record(
+                institute,
+                NiiInstituteEventType.AssignmentModeChanged,
+                NiiInstituteEventSeverity.Info,
+                new NiiInstituteEventData(
+                    requestedBy,
+                    LaboratoryId: laboratory.LaboratoryId,
+                    AssignmentMode: newMode));
+        }
 
         if (enabled &&
             laboratory.ActiveWorkOrder is { } orderUid &&
@@ -148,7 +178,11 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
         institute.Comp.Balance -= project.Cost;
         institute.Comp.ResearchStatus = NiiResearchStatus.Authorized;
         institute.Comp.IsBankrupt = institute.Comp.Balance < 0;
-        NiiInstituteSystem.AddEvent(institute.Comp, NiiInstituteEventType.ProjectAuthorized);
+        _narrative.Record(
+            institute,
+            NiiInstituteEventType.ProjectAuthorized,
+            NiiInstituteEventSeverity.Info,
+            new NiiInstituteEventData(requestedBy, orderUid, Amount: project.Cost));
 
         if (TryComp<NiiResearchWorkOrderComponent>(orderUid.Value, out var order) &&
             order.Laboratory is { } laboratoryUid &&
@@ -237,7 +271,8 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
                 headAvailability,
                 assignmentMode,
                 researchers,
-                institute.EventLog.ToArray()));
+                institute.EventLog.TakeLast(6).ToArray(),
+                institute.AiMessages.TakeLast(4).ToArray()));
     }
 
     private bool TryGetInstitute(out EntityUid uid, out NiiInstituteComponent institute)

@@ -38,6 +38,19 @@
                    HorizontalAlignment="Center" />
         </PanelContainer>
 
+        <BoxContainer Name="AiPanel" Orientation="Vertical" HorizontalExpand="True">
+            <Label Text="{Loc 'nii-terminal-ai-heading'}"
+                   StyleClasses="LabelHeading"
+                   Margin="0 18 0 8" />
+            <PanelContainer Name="AiLatestPanel" HorizontalExpand="True">
+                <BoxContainer Orientation="Vertical" Margin="8">
+                    <Label Name="AiLatestKindValue" StyleClasses="LabelSubText" />
+                    <Label Name="AiLatestTextValue" HorizontalExpand="True" />
+                </BoxContainer>
+            </PanelContainer>
+            <Label Name="AiHistoryValue" StyleClasses="LabelSubText" Margin="0 6 0 0" />
+        </BoxContainer>
+
         <BoxContainer Name="LaboratoryPanel" Orientation="Vertical" HorizontalExpand="True">
             <Label Text="{Loc 'nii-terminal-laboratory-heading'}"
                    StyleClasses="LabelHeading"
