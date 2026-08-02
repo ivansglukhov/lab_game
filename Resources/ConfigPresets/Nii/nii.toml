@@ -5,7 +5,7 @@ lobbyenabled = true
 lobbyduration = 10
 defaultpreset = "NiiPrototype"
 map = "NiiPrototypeMap"
-role_timers = false
+role_timers = true
 role_loadout_timers = false
 new_character_jobs = "NiiDirector"
 

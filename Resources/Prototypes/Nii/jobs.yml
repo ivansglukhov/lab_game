@@ -12,6 +12,10 @@
   name: job-name-nii-director
   description: job-description-nii-director
   playTimeTracker: JobNiiDirector
+  requirements:
+  - !type:SpeciesRequirement
+    species:
+    - Human
   weight: 100
   startingGear: CaptainGear
   icon: JobIconCaptain
