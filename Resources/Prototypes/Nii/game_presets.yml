@@ -1,0 +1,12 @@
+- type: gamePreset
+  id: NiiPrototype
+  alias:
+  - nii
+  name: nii-prototype-title
+  description: nii-prototype-description
+  showInVote: false
+  minPlayers: 1
+  maxPlayers: 1
+  supportedMaps: NiiPrototypeMapPool
+  rules:
+  - NiiPrototypeRule

@@ -1,0 +1,23 @@
+- type: department
+  id: Nii
+  name: department-Nii
+  description: department-Nii-description
+  color: "#4F769A"
+  weight: 100
+  roles:
+  - NiiDirector
+
+- type: job
+  id: NiiDirector
+  name: job-name-nii-director
+  description: job-description-nii-director
+  playTimeTracker: JobNiiDirector
+  weight: 100
+  startingGear: CaptainGear
+  icon: JobIconCaptain
+  supervisors: job-supervisors-nii-director
+  accessGroups:
+  - AllAccess
+
+- type: playTimeTracker
+  id: JobNiiDirector

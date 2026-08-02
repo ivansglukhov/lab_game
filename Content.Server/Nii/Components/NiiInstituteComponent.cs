@@ -1,0 +1,39 @@
+namespace Content.Server.Nii.Components;
+
+/// <summary>
+/// Stores the authoritative simulation state for an NII prototype round.
+/// </summary>
+[RegisterComponent]
+public sealed partial class NiiInstituteComponent : Component
+{
+    [DataField("balance")]
+    public int Balance = 500_000;
+
+    [DataField("dailyFunding")]
+    public int DailyFunding = 125_000;
+
+    [DataField("dailyExpenses")]
+    public int DailyExpenses = 150_000;
+
+    [DataField("reputation")]
+    public int Reputation;
+
+    [DataField("science")]
+    public int Science;
+
+    [DataField("currentDay")]
+    public int CurrentDay = 1;
+
+    [DataField("dayDurationSeconds")]
+    public float DayDurationSeconds = 120f;
+
+    /// <summary>
+    /// Negative balance is a soft failure state and does not stop the round.
+    /// </summary>
+    public bool IsBankrupt;
+
+    /// <summary>
+    /// Runtime-only time accumulated toward the next institute day.
+    /// </summary>
+    public float ElapsedSeconds;
+}

@@ -1,0 +1,21 @@
+[game]
+hostname = "NII Prototype"
+soft_max_players = 1
+lobbyenabled = true
+lobbyduration = 5
+defaultpreset = "NiiPrototype"
+map = "NiiPrototypeMap"
+role_timers = false
+role_loadout_timers = false
+new_character_jobs = "NiiDirector"
+
+[events]
+enabled = false
+
+[shuttle]
+emergency = false
+arrivals = false
+preload_grids = false
+
+[hub]
+advertise = false

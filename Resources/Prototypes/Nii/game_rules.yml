@@ -1,0 +1,11 @@
+- type: entity
+  id: NiiPrototypeRule
+  parent: BaseGameRule
+  components:
+  - type: NiiPrototypeRule
+
+- type: entity
+  id: NiiInstituteState
+  name: состояние НИИ
+  components:
+  - type: NiiInstitute
