@@ -13,6 +13,7 @@ using Content.Server.Nii.Systems;
 using Content.Server.NPC.HTN;
 using Content.Shared.Atmos;
 using Content.Shared.Chemistry.EntitySystems;
+using Content.Shared.Chemistry.Reagent;
 using Content.Shared.CCVar;
 using Content.Shared.GameTicking;
 using Content.Shared.FixedPoint;
@@ -149,7 +150,9 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(laboratory!.Institute, Is.EqualTo(instituteUid));
         Assert.That(laboratory.Head, Is.Not.Null);
         Assert.That(laboratory.Researchers, Has.Count.EqualTo(2));
+        Assert.That(laboratory.Technicians, Has.Count.EqualTo(2));
         Assert.That(laboratory.ResearchMachine, Is.Not.Null);
+        Assert.That(laboratory.ChemicalReactor, Is.Not.Null);
         Assert.That(laboratories.MoveNext(out _, out _), Is.False);
         Assert.That(institute.Laboratories, Is.EqualTo(new[] { laboratoryUid }));
 
@@ -157,7 +160,7 @@ public sealed class NiiPrototypeRoundTest : GameTest
         var initialContext = contextSystem.Build((instituteUid, institute));
         Assert.That(initialContext.Authority, Is.EqualTo(NiiInstituteAiContextSystem.Authority));
         Assert.That(initialContext.Laboratories, Has.Length.EqualTo(1));
-        Assert.That(initialContext.Laboratories[0].Employees, Has.Length.EqualTo(3));
+        Assert.That(initialContext.Laboratories[0].Employees, Has.Length.EqualTo(5));
         Assert.That(initialContext.Laboratories[0].Sensors.AtmosphereAvailable, Is.True);
         Assert.That(initialContext.Laboratories[0].Sensors.PressureKpa, Is.GreaterThan(0f));
         Assert.That(initialContext.Laboratories[0].Sensors.OxygenMoles, Is.GreaterThan(0f));
@@ -172,6 +175,7 @@ public sealed class NiiPrototypeRoundTest : GameTest
         var employees = SEntMan.EntityQueryEnumerator<NiiEmployeeComponent>();
         var employeeRoles = new List<NiiEmployeeRole>();
         var researcherUids = new List<EntityUid>();
+        var technicianUids = new List<EntityUid>();
         while (employees.MoveNext(out var employeeUid, out var employee))
         {
             Assert.That(employee.Laboratory, Is.EqualTo(laboratoryUid));
@@ -181,19 +185,50 @@ public sealed class NiiPrototypeRoundTest : GameTest
             employeeRoles.Add(employee.Role);
             if (employee.Role == NiiEmployeeRole.Researcher)
                 researcherUids.Add(employeeUid);
+            if (employee.Role == NiiEmployeeRole.LaboratoryTechnician)
+                technicianUids.Add(employeeUid);
         }
         Assert.That(employeeRoles, Is.EquivalentTo(new[]
         {
             NiiEmployeeRole.LaboratoryHead,
             NiiEmployeeRole.Researcher,
             NiiEmployeeRole.Researcher,
+            NiiEmployeeRole.LaboratoryTechnician,
+            NiiEmployeeRole.LaboratoryTechnician,
         }));
         Assert.That(researcherUids, Has.Count.EqualTo(2));
+        Assert.That(technicianUids, Has.Count.EqualTo(2));
         var researcherUid = researcherUids[0];
         Assert.That(researcherUid.IsValid(), Is.True);
         Assert.That(SEntMan.HasComponent<HTNComponent>(researcherUid), Is.True);
         Assert.That(SEntMan.HasComponent<ActiveNPCComponent>(researcherUid), Is.True);
         var researcherStartPosition = SEntMan.GetComponent<TransformComponent>(researcherUid).LocalPosition;
+        var technicianUid = technicianUids[0];
+        var technicianStartPosition = SEntMan.GetComponent<TransformComponent>(technicianUid).LocalPosition;
+
+        var solutions = Server.System<SharedSolutionContainerSystem>();
+        FixedPoint2 StockAmount(ProtoId<ReagentPrototype> reagent)
+        {
+            var stocks = SEntMan.EntityQueryEnumerator<NiiChemicalStockComponent>();
+            while (stocks.MoveNext(out var stockUid, out var stock))
+            {
+                if (stock.Reagent != reagent ||
+                    !solutions.TryGetSolution(stockUid, stock.SolutionName, out _, out var solution))
+                    continue;
+
+                return solution!.GetTotalPrototypeQuantity(reagent);
+            }
+
+            Assert.Fail($"Stock for {reagent} was not found.");
+            return FixedPoint2.Zero;
+        }
+
+        Assert.That(StockAmount("Copper"), Is.EqualTo(FixedPoint2.New(30)));
+        Assert.That(StockAmount("Oxygen"), Is.EqualTo(FixedPoint2.New(30)));
+        Assert.That(StockAmount("SulfuricAcid"), Is.EqualTo(FixedPoint2.New(60)));
+
+        var initialSamples = SEntMan.EntityQueryEnumerator<NiiResearchSampleComponent>();
+        Assert.That(initialSamples.MoveNext(out _, out _), Is.False);
 
         var project = Server.ProtoMan.Index(institute.ActiveProject);
         var terminalSystem = Server.System<NiiDirectorTerminalSystem>();
@@ -206,8 +241,9 @@ public sealed class NiiPrototypeRoundTest : GameTest
             eventState.Type == NiiInstituteEventType.WorkOrderCreated), Is.EqualTo(1));
         Assert.That(institute.EventLog.Count(eventState =>
             eventState.Type == NiiInstituteEventType.ProjectAuthorized), Is.EqualTo(1));
-        Assert.That(institute.AiMessages[^1].RelatedEventSequence,
-            Is.EqualTo(institute.EventLog[^1].Sequence));
+        var latestAiEvent = institute.EventLog.Single(eventState =>
+            eventState.Sequence == institute.AiMessages[^1].RelatedEventSequence);
+        Assert.That(latestAiEvent.Type, Is.EqualTo(NiiInstituteEventType.ProductionOrderCreated));
         await Server.WaitPost(() => authorized = terminalSystem.TryAuthorizeResearch((instituteUid, institute)));
         Assert.That(authorized, Is.False);
         Assert.That(institute.Balance, Is.EqualTo(500_000 - project.Cost));
@@ -222,11 +258,58 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(workOrder.AssignedTo, Is.Null);
         Assert.That(workOrder.Machine, Is.Null);
         Assert.That(workOrder.Sample, Is.Null);
-        Assert.That(workOrder.Status, Is.EqualTo(NiiWorkOrderStatus.AwaitingAssignment));
+        Assert.That(workOrder.Status, Is.EqualTo(NiiWorkOrderStatus.AwaitingProduction));
+        Assert.That(workOrder.ProductionOrder, Is.Not.Null);
+
+        var productionOrders = SEntMan.EntityQueryEnumerator<NiiProductionOrderComponent>();
+        Assert.That(productionOrders.MoveNext(out var productionOrderUid, out var productionOrder), Is.True);
+        Assert.That(productionOrders.MoveNext(out _, out _), Is.False);
+        Assert.That(productionOrderUid, Is.EqualTo(workOrder.ProductionOrder));
+        Assert.That(productionOrder!.AssignedTo, Is.EqualTo(technicianUid));
+        Assert.That(productionOrder.Reactor, Is.EqualTo(laboratory.ChemicalReactor));
+        Assert.That(SEntMan.GetComponent<NiiEmployeeComponent>(technicianUid).ActiveWorkOrder,
+            Is.EqualTo(productionOrderUid));
 
         await Pair.RunTicksSync(10);
         Assert.That(SEntMan.GetComponent<TransformComponent>(researcherUid).LocalPosition,
             Is.EqualTo(researcherStartPosition));
+
+        for (var i = 0; i < 300 && workOrder.Status == NiiWorkOrderStatus.AwaitingProduction; i++)
+            await Pair.RunTicksSync(5);
+
+        var technicianHtn = SEntMan.GetComponent<HTNComponent>(technicianUid);
+        var reactorContents = "unavailable";
+        if (laboratory.ChemicalReactor is { } diagnosticReactor &&
+            solutions.TryGetSolution(diagnosticReactor, "reactor", out _, out var diagnosticSolution))
+        {
+            reactorContents = $"Cu={diagnosticSolution!.GetTotalPrototypeQuantity("Copper")}," +
+                              $"O2={diagnosticSolution.GetTotalPrototypeQuantity("Oxygen")}," +
+                              $"CuO={diagnosticSolution.GetTotalPrototypeQuantity("CopperOxide")}";
+        }
+        Assert.That(
+            workOrder.Status,
+            Is.EqualTo(NiiWorkOrderStatus.AwaitingAssignment),
+            $"production={productionOrder.Status}, stage={productionOrder.StageIndex}, " +
+            $"input={productionOrder.CurrentInput}, reactor={reactorContents}, " +
+            $"stocks=Cu:{StockAmount("Copper")}/O2:{StockAmount("Oxygen")}/acid:{StockAmount("SulfuricAcid")}, " +
+            $"plan={technicianHtn.Plan?.CurrentOperator.GetType().Name ?? "none"}, " +
+            $"position={SEntMan.GetComponent<TransformComponent>(technicianUid).LocalPosition}");
+        Assert.That(productionOrder.Status, Is.EqualTo(NiiProductionOrderStatus.Completed));
+        Assert.That(laboratory.ActiveProductionOrder, Is.Null);
+        Assert.That(SEntMan.GetComponent<NiiEmployeeComponent>(technicianUid).ActiveWorkOrder, Is.Null);
+        Assert.That(SEntMan.GetComponent<TransformComponent>(technicianUid).LocalPosition,
+            Is.Not.EqualTo(technicianStartPosition));
+        Assert.That(StockAmount("Copper"), Is.EqualTo(FixedPoint2.New(25)));
+        Assert.That(StockAmount("Oxygen"), Is.EqualTo(FixedPoint2.New(25)));
+        Assert.That(StockAmount("SulfuricAcid"), Is.EqualTo(FixedPoint2.New(50)));
+        Assert.That(institute.EventLog.Count(eventState =>
+            eventState.Type == NiiInstituteEventType.ProductionOrderCreated), Is.EqualTo(1));
+        Assert.That(institute.EventLog.Count(eventState =>
+            eventState.Type == NiiInstituteEventType.ProductionStageStarted), Is.EqualTo(2));
+        Assert.That(institute.EventLog.Count(eventState =>
+            eventState.Type == NiiInstituteEventType.ProductionStageCompleted), Is.EqualTo(2));
+        Assert.That(institute.EventLog.Count(eventState =>
+            eventState.Type == NiiInstituteEventType.ReagentProduced), Is.EqualTo(1));
 
         var assigned = false;
         await Server.WaitPost(() => assigned = terminalSystem.TryAssignResearcher(
@@ -246,19 +329,6 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(SEntMan.GetComponent<NiiEmployeeComponent>(workOrder.AssignedTo!.Value).ActiveWorkOrder,
             Is.EqualTo(workOrderUid));
         Assert.That(SEntMan.GetComponent<NiiEmployeeComponent>(researcherUids[1]).ActiveWorkOrder, Is.Null);
-
-        var workOrderSystem = Server.System<NiiResearchWorkOrderSystem>();
-        var workOrderEntity = new Entity<NiiResearchWorkOrderComponent>(workOrderUid, workOrder);
-        workOrderSystem.Block(workOrderEntity, NiiWorkOrderBlockReason.NoSample);
-        Assert.That(workOrder.Status, Is.EqualTo(NiiWorkOrderStatus.Blocked));
-        Assert.That(workOrder.BlockReason, Is.EqualTo(NiiWorkOrderBlockReason.NoSample));
-        Assert.That(institute.EventLog.Count(eventState =>
-            eventState.Type == NiiInstituteEventType.ResourceShortage), Is.EqualTo(1));
-        Assert.That(workOrderSystem.TryReserveSample(workOrderEntity), Is.True);
-        Assert.That(workOrder.Status, Is.EqualTo(NiiWorkOrderStatus.FetchingSample));
-        Assert.That(workOrder.BlockReason, Is.EqualTo(NiiWorkOrderBlockReason.None));
-        Assert.That(institute.EventLog.Count(eventState =>
-            eventState.Type == NiiInstituteEventType.WorkOrderRecovered), Is.EqualTo(1));
 
         var machines = SEntMan.EntityQueryEnumerator<NiiResearchMachineComponent>();
         Assert.That(machines.MoveNext(out var machineUid, out var machine), Is.True);
@@ -289,7 +359,6 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(SEntMan.GetComponent<TransformComponent>(researcherUid).LocalPosition,
             Is.Not.EqualTo(researcherStartPosition));
 
-        var solutions = Server.System<SharedSolutionContainerSystem>();
         Assert.That(solutions.TryGetSolution(sampleUid, "beaker", out _, out var sampleSolution), Is.True);
         Assert.That(sampleSolution!.GetTotalPrototypeQuantity(project.RequiredReagent), Is.EqualTo(FixedPoint2.Zero));
 
@@ -311,18 +380,10 @@ public sealed class NiiPrototypeRoundTest : GameTest
         await Server.WaitPost(() => delegationChanged = terminalSystem.TrySetDelegatedAssignment(
             (instituteUid, institute), false));
         Assert.That(delegationChanged, Is.True);
-        EntityUid? delegatedOrderUid = null;
-        await Server.WaitPost(() => delegatedOrderUid = workOrderSystem.Create((instituteUid, institute)));
-        Assert.That(delegatedOrderUid, Is.Not.Null);
-        var delegatedOrder = SEntMan.GetComponent<NiiResearchWorkOrderComponent>(delegatedOrderUid!.Value);
-        Assert.That(delegatedOrder.Status, Is.EqualTo(NiiWorkOrderStatus.AwaitingAssignment));
-        Assert.That(delegatedOrder.AssignedTo, Is.Null);
         await Server.WaitPost(() => delegationChanged = terminalSystem.TrySetDelegatedAssignment(
             (instituteUid, institute), true));
         Assert.That(delegationChanged, Is.True);
         Assert.That(laboratory.AssignmentMode, Is.EqualTo(NiiLaboratoryAssignmentMode.Delegated));
-        Assert.That(delegatedOrder.AssignedTo, Is.Not.Null);
-        Assert.That(delegatedOrder.Status, Is.EqualTo(NiiWorkOrderStatus.FetchingSample));
 
         var results = SEntMan.EntityQueryEnumerator<NiiResearchResultComponent>();
         Assert.That(results.MoveNext(out var resultUid, out _), Is.True);

@@ -46,6 +46,11 @@ public sealed partial class NiiInstituteAiContextSystem : EntitySystem
                 if (TryComp<NiiEmployeeComponent>(researcherUid, out var researcher))
                     employees.Add(EmployeeContext(researcherUid, researcher));
             }
+            foreach (var technicianUid in laboratory.Technicians.OrderBy(uid => uid))
+            {
+                if (TryComp<NiiEmployeeComponent>(technicianUid, out var technician))
+                    employees.Add(EmployeeContext(technicianUid, technician));
+            }
 
             NiiAiWorkOrderContext? orderContext = null;
             if (laboratory.ActiveWorkOrder is { } orderUid &&

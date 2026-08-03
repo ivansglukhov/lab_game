@@ -16,6 +16,15 @@
     id: SciencePDA
     ears: ClothingHeadsetScience
 
+- type: startingGear
+  id: NiiLaboratoryTechnicianGear
+  equipment:
+    jumpsuit: ClothingUniformJumpsuitChemistry
+    shoes: ClothingShoesColorWhite
+    outerClothing: ClothingOuterCoatLabChem
+    id: ChemistryPDA
+    ears: ClothingHeadsetMedical
+
 - type: entity
   id: NiiEmployeeHumanBase
   parent: MobHuman
@@ -72,3 +81,21 @@
   name: исследовательское поручение
   components:
   - type: NiiResearchWorkOrder
+
+- type: entity
+  id: NiiLaboratoryTechnician
+  parent: NiiEmployeeHumanBase
+  name: лаборант-химик
+  components:
+  - type: Loadout
+    prototypes:
+    - NiiLaboratoryTechnicianGear
+  - type: NiiEmployee
+    laboratoryId: main
+    role: LaboratoryTechnician
+  - type: HTN
+    rootTask:
+      task: NiiTechnicianCompound
+    blackboard:
+      NavInteract: !type:Bool
+        true

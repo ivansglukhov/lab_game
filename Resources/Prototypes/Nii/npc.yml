@@ -8,3 +8,14 @@
   - tasks:
     - !type:HTNPrimitiveTask
       operator: !type:NoOperator
+
+- type: htnCompound
+  id: NiiTechnicianCompound
+  branches:
+  - tasks:
+    - !type:HTNPrimitiveTask
+      operator: !type:NiiExecuteProductionOrderOperator
+
+  - tasks:
+    - !type:HTNPrimitiveTask
+      operator: !type:NoOperator

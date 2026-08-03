@@ -1,0 +1,300 @@
+using System.Linq;
+using Content.Server.Nii.Components;
+using Content.Shared.Chemistry.EntitySystems;
+using Content.Shared.Chemistry.Reagent;
+using Content.Shared.FixedPoint;
+using Content.Shared.Nii;
+using Content.Shared.Nii.Prototypes;
+using Robust.Shared.Prototypes;
+
+namespace Content.Server.Nii.Systems;
+
+/// <summary>
+/// Creates production orders and runs timed, data-driven chemical stages after technicians deliver physical stocks.
+/// </summary>
+public sealed partial class NiiChemicalProductionSystem : EntitySystem
+{
+    [Dependency] private SharedSolutionContainerSystem _solutions = default!;
+    [Dependency] private IPrototypeManager _prototypes = default!;
+    [Dependency] private NiiInstituteNarrativeSystem _narrative = default!;
+    [Dependency] private NiiResearchWorkOrderSystem _researchOrders = default!;
+
+    public override void Update(float frameTime)
+    {
+        base.Update(frameTime);
+
+        var query = EntityQueryEnumerator<NiiChemicalReactorComponent>();
+        while (query.MoveNext(out var reactorUid, out var reactor))
+        {
+            if (!reactor.IsProcessing ||
+                reactor.ActiveOrder is not { } orderUid ||
+                !TryComp<NiiProductionOrderComponent>(orderUid, out var order))
+                continue;
+
+            var process = _prototypes.Index(order.Process);
+            if (order.StageIndex >= process.Stages.Count)
+                continue;
+
+            reactor.ElapsedSeconds += frameTime;
+            var stage = process.Stages[order.StageIndex];
+            if (reactor.ElapsedSeconds < stage.DurationSeconds)
+                continue;
+
+            CompleteStage((reactorUid, reactor), (orderUid, order), process, stage);
+        }
+    }
+
+    public EntityUid? Create(
+        Entity<NiiInstituteComponent> institute,
+        Entity<NiiResearchWorkOrderComponent> researchOrder)
+    {
+        if (researchOrder.Comp.Laboratory is not { } laboratoryUid ||
+            !TryComp<NiiLaboratoryComponent>(laboratoryUid, out var laboratory) ||
+            laboratory.ChemicalReactor is not { } reactorUid ||
+            !TryComp<NiiChemicalReactorComponent>(reactorUid, out var reactor) ||
+            laboratory.ActiveProductionOrder is { } active && !Deleted(active))
+            return null;
+
+        var technicianUid = laboratory.Technicians
+            .Where(uid => !Deleted(uid))
+            .OrderBy(uid => uid)
+            .FirstOrDefault(uid =>
+                TryComp<NiiEmployeeComponent>(uid, out var employee) && employee.ActiveWorkOrder is null);
+        if (!technicianUid.Valid || !TryComp<NiiEmployeeComponent>(technicianUid, out var technician))
+            return null;
+
+        var project = _prototypes.Index(researchOrder.Comp.Project);
+        var orderUid = Spawn("NiiChemicalProductionOrder", Transform(reactorUid).Coordinates);
+        var order = Comp<NiiProductionOrderComponent>(orderUid);
+        order.Process = project.ProductionProcess;
+        order.Status = NiiProductionOrderStatus.FetchingInputs;
+        order.Institute = institute.Owner;
+        order.Laboratory = laboratoryUid;
+        order.ResearchOrder = researchOrder.Owner;
+        order.AssignedTo = technicianUid;
+        order.Reactor = reactorUid;
+
+        technician.ActiveWorkOrder = orderUid;
+        reactor.ActiveOrder = orderUid;
+        laboratory.ActiveProductionOrder = orderUid;
+        researchOrder.Comp.ProductionOrder = orderUid;
+        researchOrder.Comp.Status = NiiWorkOrderStatus.AwaitingProduction;
+
+        _narrative.Record(
+            institute,
+            NiiInstituteEventType.ProductionOrderCreated,
+            data: new NiiInstituteEventData(technicianUid, orderUid, laboratory.LaboratoryId));
+        _narrative.Record(
+            institute,
+            NiiInstituteEventType.TechnicianAssigned,
+            data: new NiiInstituteEventData(technicianUid, orderUid, laboratory.LaboratoryId));
+
+        TryReserveNextInput((orderUid, order));
+        return orderUid;
+    }
+
+    public bool TryReserveNextInput(Entity<NiiProductionOrderComponent> order)
+    {
+        if (order.Comp.Reactor is not { } reactorUid ||
+            !TryComp<NiiChemicalReactorComponent>(reactorUid, out var reactor) ||
+            !_solutions.TryGetSolution(reactorUid, reactor.SolutionName, out _, out var reactorSolution))
+            return false;
+
+        var process = _prototypes.Index(order.Comp.Process);
+        if (order.Comp.StageIndex >= process.Stages.Count)
+            return false;
+
+        var stage = process.Stages[order.Comp.StageIndex];
+        foreach (var (reagent, required) in stage.Inputs)
+        {
+            var missing = required - reactorSolution.GetTotalPrototypeQuantity(reagent);
+            if (missing <= 0)
+                continue;
+
+            var stocks = EntityQueryEnumerator<NiiChemicalStockComponent>();
+            while (stocks.MoveNext(out var stockUid, out var stock))
+            {
+                if (stock.Reagent != reagent || stock.ReservedBy is not null ||
+                    !_solutions.TryGetSolution(stockUid, stock.SolutionName, out _, out var stockSolution) ||
+                    stockSolution.GetTotalPrototypeQuantity(reagent) < missing)
+                    continue;
+
+                stock.ReservedBy = order.Owner;
+                order.Comp.CurrentSource = stockUid;
+                order.Comp.CurrentInput = reagent;
+                order.Comp.CurrentInputAmount = missing;
+                order.Comp.Status = NiiProductionOrderStatus.FetchingInputs;
+                Record(order, NiiInstituteEventType.ProductionInputReserved, amount: missing.Int());
+                return true;
+            }
+
+            order.Comp.Status = NiiProductionOrderStatus.Blocked;
+            Record(order, NiiInstituteEventType.ProductionBlocked, NiiInstituteEventSeverity.Attention);
+            ReleaseOrderResources(order);
+            if (order.Comp.ResearchOrder is { } researchOrderUid &&
+                TryComp<NiiResearchWorkOrderComponent>(researchOrderUid, out var researchOrder))
+                _researchOrders.Block((researchOrderUid, researchOrder), NiiWorkOrderBlockReason.ProductionUnavailable);
+            return false;
+        }
+
+        return TryStartStage(order, (reactorUid, reactor), process, stage);
+    }
+
+    public bool TryLoadCurrentInput(
+        Entity<NiiProductionOrderComponent> order,
+        EntityUid sourceUid,
+        EntityUid technicianUid)
+    {
+        if (order.Comp.CurrentSource != sourceUid ||
+            order.Comp.CurrentInput is not { } reagent ||
+            order.Comp.Reactor is not { } reactorUid ||
+            !TryComp<NiiChemicalReactorComponent>(reactorUid, out var reactor) ||
+            !TryComp<NiiChemicalStockComponent>(sourceUid, out var stock) ||
+            !_solutions.TryGetSolution(sourceUid, stock.SolutionName, out var sourceSolutionEntity, out var sourceSolution) ||
+            !_solutions.TryGetSolution(reactorUid, reactor.SolutionName, out var reactorSolutionEntity, out var reactorSolution))
+            return false;
+
+        var amount = order.Comp.CurrentInputAmount;
+        if (sourceSolution.GetTotalPrototypeQuantity(reagent) < amount || reactorSolution.AvailableVolume < amount)
+            return false;
+
+        var removed = _solutions.RemoveReagent(sourceSolutionEntity.Value, reagent, amount);
+        if (removed != amount ||
+            !_solutions.TryAddReagent(reactorSolutionEntity.Value, reagent, removed, out var accepted) ||
+            accepted != removed)
+        {
+            if (removed > 0)
+                _solutions.TryAddReagent(sourceSolutionEntity.Value, reagent, removed, out _);
+            return false;
+        }
+        stock.ReservedBy = null;
+        order.Comp.CurrentSource = null;
+        order.Comp.CurrentInput = null;
+        order.Comp.CurrentInputAmount = 0;
+        order.Comp.Status = NiiProductionOrderStatus.FetchingInputs;
+        Record(order, NiiInstituteEventType.ProductionInputDelivered, actor: technicianUid, amount: amount.Int());
+        TryReserveNextInput(order);
+        return true;
+    }
+
+    private bool TryStartStage(
+        Entity<NiiProductionOrderComponent> order,
+        Entity<NiiChemicalReactorComponent> reactor,
+        NiiChemicalProcessPrototype process,
+        NiiChemicalProcessStage stage)
+    {
+        if (!_solutions.TryGetSolution(reactor.Owner, reactor.Comp.SolutionName, out var solutionEntity, out var solution))
+            return false;
+
+        foreach (var (reagent, amount) in stage.Inputs)
+        {
+            if (solution.GetTotalPrototypeQuantity(reagent) < amount)
+                return false;
+        }
+
+        foreach (var (reagent, amount) in stage.Inputs)
+        {
+            _solutions.RemoveReagent(solutionEntity.Value, reagent, amount);
+        }
+
+        reactor.Comp.IsProcessing = true;
+        reactor.Comp.ElapsedSeconds = 0f;
+        order.Comp.Status = NiiProductionOrderStatus.Processing;
+        Record(order, NiiInstituteEventType.ProductionStageStarted, amount: order.Comp.StageIndex + 1);
+        return true;
+    }
+
+    private void CompleteStage(
+        Entity<NiiChemicalReactorComponent> reactor,
+        Entity<NiiProductionOrderComponent> order,
+        NiiChemicalProcessPrototype process,
+        NiiChemicalProcessStage stage)
+    {
+        if (!_solutions.TryGetSolution(reactor.Owner, reactor.Comp.SolutionName, out var solutionEntity, out _))
+            return;
+
+        _solutions.TryAddReagent(solutionEntity.Value, stage.Output, stage.OutputAmount, out _);
+        reactor.Comp.IsProcessing = false;
+        reactor.Comp.ElapsedSeconds = 0f;
+        Record(order, NiiInstituteEventType.ProductionStageCompleted, amount: order.Comp.StageIndex + 1);
+        order.Comp.StageIndex++;
+
+        if (order.Comp.StageIndex < process.Stages.Count)
+        {
+            order.Comp.Status = NiiProductionOrderStatus.FetchingInputs;
+            TryReserveNextInput(order);
+            return;
+        }
+
+        _solutions.RemoveReagent(solutionEntity.Value, stage.Output, stage.OutputAmount);
+        var sampleUid = Spawn(process.ProductEntity, Transform(reactor.Owner).Coordinates);
+        CompleteOrder(reactor, order, sampleUid, stage.OutputAmount.Int());
+    }
+
+    private void CompleteOrder(
+        Entity<NiiChemicalReactorComponent> reactor,
+        Entity<NiiProductionOrderComponent> order,
+        EntityUid sampleUid,
+        int amount)
+    {
+        order.Comp.Status = NiiProductionOrderStatus.Completed;
+        ReleaseOrderResources(order, reactor);
+
+        if (order.Comp.ResearchOrder is { } researchOrderUid &&
+            TryComp<NiiResearchWorkOrderComponent>(researchOrderUid, out var researchOrder))
+            _researchOrders.OnProductionCompleted((researchOrderUid, researchOrder), sampleUid);
+
+        Record(order, NiiInstituteEventType.ReagentProduced, NiiInstituteEventSeverity.Success, amount: amount);
+    }
+
+    private void ReleaseOrderResources(
+        Entity<NiiProductionOrderComponent> order,
+        NiiChemicalReactorComponent? knownReactor = null)
+    {
+        if (order.Comp.Reactor is { } reactorUid &&
+            (knownReactor ?? CompOrNull<NiiChemicalReactorComponent>(reactorUid)) is { } reactor &&
+            reactor.ActiveOrder == order.Owner)
+        {
+            reactor.ActiveOrder = null;
+            reactor.IsProcessing = false;
+            reactor.ElapsedSeconds = 0f;
+        }
+
+        if (order.Comp.CurrentSource is { } sourceUid &&
+            TryComp<NiiChemicalStockComponent>(sourceUid, out var stock) &&
+            stock.ReservedBy == order.Owner)
+            stock.ReservedBy = null;
+
+        if (order.Comp.AssignedTo is { } technicianUid &&
+            TryComp<NiiEmployeeComponent>(technicianUid, out var technician) &&
+            technician.ActiveWorkOrder == order.Owner)
+            technician.ActiveWorkOrder = null;
+
+        if (order.Comp.Laboratory is { } laboratoryUid &&
+            TryComp<NiiLaboratoryComponent>(laboratoryUid, out var laboratory) &&
+            laboratory.ActiveProductionOrder == order.Owner)
+            laboratory.ActiveProductionOrder = null;
+    }
+
+    private void Record(
+        Entity<NiiProductionOrderComponent> order,
+        NiiInstituteEventType type,
+        NiiInstituteEventSeverity severity = NiiInstituteEventSeverity.Info,
+        EntityUid? actor = null,
+        int amount = 0)
+    {
+        if (order.Comp.Institute is not { } instituteUid ||
+            !TryComp<NiiInstituteComponent>(instituteUid, out var institute))
+            return;
+
+        var laboratoryId = order.Comp.Laboratory is { } laboratoryUid &&
+                           TryComp<NiiLaboratoryComponent>(laboratoryUid, out var laboratory)
+            ? laboratory.LaboratoryId
+            : string.Empty;
+        _narrative.Record(
+            (instituteUid, institute),
+            type,
+            severity,
+            new NiiInstituteEventData(actor ?? order.Comp.AssignedTo, order.Owner, laboratoryId, Amount: amount));
+    }
+}

@@ -26,8 +26,8 @@
 - type: entity
   id: NiiResearchMachine
   parent: BaseMachine
-  name: установка плазменной стабилизации
-  description: Экспериментальная установка для выращивания и стабилизации плазменных культур.
+  name: исследовательская установка
+  description: Экспериментальная установка для проведения работ с подготовленными химическими образцами.
   placement:
     mode: SnapgridCenter
   components:
@@ -44,19 +44,112 @@
   - type: NiiResearchMachine
 
 - type: entity
-  id: NiiPlasmaCultureSample
+  id: NiiCopperSulfateResearchSample
   parent: Beaker
-  name: исходная плазменная культура
-  description: Подготовленная культура, содержащая 15 единиц плазмы.
+  name: исследовательский образец медного купороса
+  description: Произведённая и промаркированная партия медного купороса.
   components:
   - type: NiiResearchSample
   - type: Label
-    currentLabel: исходная плазменная культура
+    currentLabel: медный купорос — исследовательская партия
   - type: Solution
     solution:
       reagents:
-      - ReagentId: Plasma
+      - ReagentId: CopperSulfate
         Quantity: 15
+
+- type: entity
+  id: NiiChemicalReactor
+  parent: BaseMachine
+  name: реактор химического синтеза
+  description: Установка последовательного синтеза промежуточных и исследовательских реагентов.
+  placement:
+    mode: SnapgridCenter
+  components:
+  - type: Sprite
+    noRot: true
+    sprite: Structures/Machines/mixer.rsi
+    layers:
+    - state: mixer_empty
+    - state: mixer_screens
+      shader: unshaded
+  - type: Transform
+    anchored: true
+  - type: NiiChemicalReactor
+  - type: Solution
+    id: reactor
+    solution:
+      maxVol: 100
+
+- type: entity
+  id: NiiCopperStock
+  parent: BaseItem
+  name: ёмкость с медью
+  description: Конечный складской запас очищенной меди для химического производства.
+  components:
+  - type: Sprite
+    sprite: Objects/Specific/Chemistry/beaker_large.rsi
+    state: beakerlarge
+  - type: NiiChemicalStock
+    reagent: Copper
+  - type: Label
+    currentLabel: медь — 30 ед.
+  - type: Solution
+    id: beaker
+    solution:
+      maxVol: 100
+      reagents:
+      - ReagentId: Copper
+        Quantity: 30
+
+- type: entity
+  id: NiiOxygenStock
+  parent: BaseItem
+  name: ёмкость с кислородным реагентом
+  description: Конечный запас кислорода для окислительных стадий синтеза.
+  components:
+  - type: Sprite
+    sprite: Objects/Specific/Chemistry/beaker_large.rsi
+    state: beakerlarge
+  - type: NiiChemicalStock
+    reagent: Oxygen
+  - type: Label
+    currentLabel: кислород — 30 ед.
+  - type: Solution
+    id: beaker
+    solution:
+      maxVol: 100
+      reagents:
+      - ReagentId: Oxygen
+        Quantity: 30
+
+- type: entity
+  id: NiiSulfuricAcidStock
+  parent: BaseItem
+  name: ёмкость с серной кислотой
+  description: Кислотостойкая складская ёмкость с конечным запасом серной кислоты.
+  components:
+  - type: Sprite
+    sprite: Objects/Specific/Chemistry/beaker_large.rsi
+    state: beakerlarge
+  - type: NiiChemicalStock
+    reagent: SulfuricAcid
+  - type: Label
+    currentLabel: серная кислота — 60 ед.
+  - type: Solution
+    id: beaker
+    solution:
+      maxVol: 100
+      reagents:
+      - ReagentId: SulfuricAcid
+        Quantity: 60
+
+- type: entity
+  id: NiiChemicalProductionOrder
+  categories: [ HideSpawnMenu ]
+  name: производственное поручение
+  components:
+  - type: NiiProductionOrder
 
 - type: entity
   id: NiiStablePlasmaCultureResult
@@ -70,5 +163,5 @@
   - type: Solution
     solution:
       reagents:
-      - ReagentId: Plasma
+      - ReagentId: CopperSulfate
         Quantity: 5

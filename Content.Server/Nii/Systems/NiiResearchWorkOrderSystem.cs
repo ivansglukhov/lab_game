@@ -68,7 +68,7 @@ public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
             order.Institute = institute.Owner;
             order.Laboratory = laboratoryUid;
             order.RequestedBy = requestedBy;
-            order.Status = NiiWorkOrderStatus.AwaitingAssignment;
+            order.Status = NiiWorkOrderStatus.AwaitingProduction;
 
             institute.Comp.ActiveWorkOrder = orderUid;
             laboratory.ActiveWorkOrder = orderUid;
@@ -118,8 +118,38 @@ public sealed partial class NiiResearchWorkOrderSystem : EntitySystem
         }
 
         order.Comp.Machine = machineUid;
-        TryReserveSample(order);
+        if (order.Comp.Sample is { } sampleUid && !Deleted(sampleUid) && HasComp<NiiResearchSampleComponent>(sampleUid))
+        {
+            order.Comp.Status = NiiWorkOrderStatus.FetchingSample;
+            RecordOrderEvent(
+                order,
+                NiiInstituteEventType.SampleReserved,
+                NiiInstituteEventSeverity.Info,
+                researcherUid);
+            NotifyChanged(order);
+        }
+        else
+        {
+            Block(order, NiiWorkOrderBlockReason.ProductionUnavailable);
+        }
         return true;
+    }
+
+    public void OnProductionCompleted(
+        Entity<NiiResearchWorkOrderComponent> order,
+        EntityUid sampleUid)
+    {
+        if (order.Comp.Status is NiiWorkOrderStatus.Completed or NiiWorkOrderStatus.Cancelled)
+            return;
+
+        order.Comp.Sample = sampleUid;
+        order.Comp.BlockReason = NiiWorkOrderBlockReason.None;
+        order.Comp.Status = NiiWorkOrderStatus.AwaitingAssignment;
+        NotifyChanged(order);
+
+        if (order.Comp.Laboratory is { } laboratoryUid &&
+            TryComp<NiiLaboratoryComponent>(laboratoryUid, out var laboratory))
+            TryAssignDelegated(order, (laboratoryUid, laboratory));
     }
 
     public bool TryAssignDelegated(

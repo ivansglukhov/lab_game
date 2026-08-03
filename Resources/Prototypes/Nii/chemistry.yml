@@ -1,0 +1,31 @@
+- type: reagent
+  id: CopperOxide
+  name: nii-reagent-copper-oxide
+  desc: nii-reagent-copper-oxide-desc
+  physicalDesc: reagent-physical-desc-powdery
+  color: "#2F2924"
+
+- type: reagent
+  id: CopperSulfate
+  name: nii-reagent-copper-sulfate
+  desc: nii-reagent-copper-sulfate-desc
+  physicalDesc: reagent-physical-desc-crystalline
+  color: "#287FD1"
+
+- type: niiChemicalProcess
+  id: NiiCopperSulfateProcess
+  name: nii-process-copper-sulfate
+  productEntity: NiiCopperSulfateResearchSample
+  stages:
+  - inputs:
+      Copper: 5
+      Oxygen: 5
+    output: CopperOxide
+    outputAmount: 5
+    durationSeconds: 5
+  - inputs:
+      CopperOxide: 5
+      SulfuricAcid: 10
+    output: CopperSulfate
+    outputAmount: 15
+    durationSeconds: 8

@@ -133,7 +133,11 @@ public sealed partial class NiiDirectorTerminalWindow : FancyWindow
         if (state.Researchers.Length == 0)
             return Loc.GetString("nii-terminal-assignment-no-researchers");
         if (!awaitingAssignment)
+        {
+            if (state.WorkOrderStatus == NiiWorkOrderStatus.AwaitingProduction)
+                return Loc.GetString("nii-terminal-assignment-awaiting-production");
             return Loc.GetString("nii-terminal-assignment-no-pending-order");
+        }
         if (state.Researchers.All(employee => employee.Availability != NiiEmployeeAvailability.Available))
             return Loc.GetString("nii-terminal-assignment-no-available-researchers");
         if (state.AssignmentMode == NiiLaboratoryAssignmentMode.Delegated)
@@ -173,6 +177,7 @@ public sealed partial class NiiDirectorTerminalWindow : FancyWindow
         return status switch
         {
             NiiWorkOrderStatus.Created => "nii-work-order-status-created",
+            NiiWorkOrderStatus.AwaitingProduction => "nii-work-order-status-awaiting-production",
             NiiWorkOrderStatus.AwaitingAssignment => "nii-work-order-status-awaiting-assignment",
             NiiWorkOrderStatus.Assigned => "nii-work-order-status-assigned",
             NiiWorkOrderStatus.FetchingSample => "nii-work-order-status-fetching-sample",
@@ -194,6 +199,7 @@ public sealed partial class NiiDirectorTerminalWindow : FancyWindow
             NiiWorkOrderBlockReason.MachineBusy => "nii-work-order-block-machine-busy",
             NiiWorkOrderBlockReason.MachineInaccessible => "nii-work-order-block-machine-inaccessible",
             NiiWorkOrderBlockReason.EmployeeUnavailable => "nii-work-order-block-employee-unavailable",
+            NiiWorkOrderBlockReason.ProductionUnavailable => "nii-work-order-block-production-unavailable",
             _ => "nii-work-order-block-none",
         };
     }

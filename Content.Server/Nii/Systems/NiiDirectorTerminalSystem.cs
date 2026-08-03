@@ -18,6 +18,7 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
     [Dependency] private UserInterfaceSystem _ui = default!;
     [Dependency] private IPrototypeManager _prototypes = default!;
     [Dependency] private NiiResearchWorkOrderSystem _workOrders = default!;
+    [Dependency] private NiiChemicalProductionSystem _production = default!;
     [Dependency] private NiiInstituteNarrativeSystem _narrative = default!;
     [Dependency] private NiiInstituteChatSystem _chat = default!;
 
@@ -195,9 +196,8 @@ public sealed partial class NiiDirectorTerminalSystem : EntitySystem
             new NiiInstituteEventData(requestedBy, orderUid, Amount: project.Cost));
 
         if (TryComp<NiiResearchWorkOrderComponent>(orderUid.Value, out var order) &&
-            order.Laboratory is { } laboratoryUid &&
-            TryComp<NiiLaboratoryComponent>(laboratoryUid, out var laboratory))
-            _workOrders.TryAssignDelegated((orderUid.Value, order), (laboratoryUid, laboratory));
+            _production.Create(institute, (orderUid.Value, order)) is null)
+            _workOrders.Block((orderUid.Value, order), NiiWorkOrderBlockReason.ProductionUnavailable);
 
         RefreshAll(institute.Comp);
         return true;

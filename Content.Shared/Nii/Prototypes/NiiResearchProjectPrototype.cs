@@ -29,6 +29,9 @@ public sealed partial class NiiResearchProjectPrototype : IPrototype
     public FixedPoint2 RequiredReagentAmount { get; private set; } = 15;
 
     [DataField(required: true)]
+    public ProtoId<NiiChemicalProcessPrototype> ProductionProcess { get; private set; }
+
+    [DataField(required: true)]
     public EntProtoId ResultPrototype { get; private set; }
 
     [DataField]

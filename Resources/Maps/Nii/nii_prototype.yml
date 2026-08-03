@@ -5,7 +5,7 @@ meta:
   forkId: ""
   forkVersion: ""
   time: 08/02/2026 20:00:00
-  entityCount: 121
+  entityCount: 126
 maps:
 - 1
 grids:
@@ -645,7 +645,7 @@ entities:
     - type: Transform
       pos: 8.5,13.5
       parent: 2
-- proto: NiiPlasmaCultureSample
+- proto: NiiCopperStock
   entities:
   - uid: 116
     components:
@@ -722,5 +722,38 @@ entities:
     components:
     - type: Transform
       pos: 13.5,12.5
+      parent: 2
+- proto: NiiChemicalReactor
+  entities:
+  - uid: 129
+    components:
+    - type: Transform
+      pos: 12.5,11.5
+      parent: 2
+- proto: NiiOxygenStock
+  entities:
+  - uid: 130
+    components:
+    - type: Transform
+      pos: 11.5,12.5
+      parent: 2
+- proto: NiiSulfuricAcidStock
+  entities:
+  - uid: 131
+    components:
+    - type: Transform
+      pos: 10.5,11.5
+      parent: 2
+- proto: NiiLaboratoryTechnician
+  entities:
+  - uid: 132
+    components:
+    - type: Transform
+      pos: 10.5,12.5
+      parent: 2
+  - uid: 133
+    components:
+    - type: Transform
+      pos: 12.5,13.5
       parent: 2
 ...

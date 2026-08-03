@@ -87,6 +87,14 @@ public sealed partial class NiiInstituteNarrativeSystem : EntitySystem
             NiiInstituteEventType.FinancialWarning => Loc.GetString("nii-event-financial-warning", ("amount", data.Amount)),
             NiiInstituteEventType.ProjectAuthorized => Loc.GetString("nii-event-project-authorized"),
             NiiInstituteEventType.WorkOrderCreated => Loc.GetString("nii-event-work-order-created"),
+            NiiInstituteEventType.ProductionOrderCreated => Loc.GetString("nii-event-production-order-created"),
+            NiiInstituteEventType.TechnicianAssigned => Loc.GetString("nii-event-technician-assigned", ("employee", actorName)),
+            NiiInstituteEventType.ProductionInputReserved => Loc.GetString("nii-event-production-input-reserved", ("amount", data.Amount)),
+            NiiInstituteEventType.ProductionInputDelivered => Loc.GetString("nii-event-production-input-delivered", ("employee", actorName), ("amount", data.Amount)),
+            NiiInstituteEventType.ProductionStageStarted => Loc.GetString("nii-event-production-stage-started", ("stage", data.Amount)),
+            NiiInstituteEventType.ProductionStageCompleted => Loc.GetString("nii-event-production-stage-completed", ("stage", data.Amount)),
+            NiiInstituteEventType.ReagentProduced => Loc.GetString("nii-event-reagent-produced", ("amount", data.Amount)),
+            NiiInstituteEventType.ProductionBlocked => Loc.GetString("nii-event-production-blocked"),
             NiiInstituteEventType.AssignmentModeChanged => Loc.GetString(
                 data.AssignmentMode == NiiLaboratoryAssignmentMode.Delegated
                     ? "nii-event-assignment-delegated"
@@ -118,6 +126,9 @@ public sealed partial class NiiInstituteNarrativeSystem : EntitySystem
             NiiInstituteEventType.InstituteStarted => Loc.GetString("nii-ai-institute-started"),
             NiiInstituteEventType.FinancialWarning => Loc.GetString("nii-ai-financial-warning", ("amount", data.Amount)),
             NiiInstituteEventType.ProjectAuthorized => Loc.GetString("nii-ai-project-authorized"),
+            NiiInstituteEventType.ProductionOrderCreated => Loc.GetString("nii-ai-production-order-created"),
+            NiiInstituteEventType.ReagentProduced => Loc.GetString("nii-ai-reagent-produced", ("amount", data.Amount)),
+            NiiInstituteEventType.ProductionBlocked => Loc.GetString("nii-ai-production-blocked"),
             NiiInstituteEventType.AssignmentModeChanged => Loc.GetString(
                 data.AssignmentMode == NiiLaboratoryAssignmentMode.Delegated
                     ? "nii-ai-assignment-delegated"
@@ -168,6 +179,7 @@ public sealed partial class NiiInstituteNarrativeSystem : EntitySystem
             NiiWorkOrderBlockReason.MachineBusy => "nii-work-order-block-machine-busy",
             NiiWorkOrderBlockReason.MachineInaccessible => "nii-work-order-block-machine-inaccessible",
             NiiWorkOrderBlockReason.EmployeeUnavailable => "nii-work-order-block-employee-unavailable",
+            NiiWorkOrderBlockReason.ProductionUnavailable => "nii-work-order-block-production-unavailable",
             _ => "nii-work-order-block-none",
         };
     }

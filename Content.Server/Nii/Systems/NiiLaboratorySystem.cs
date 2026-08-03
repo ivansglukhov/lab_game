@@ -20,6 +20,8 @@ public sealed partial class NiiLaboratorySystem : EntitySystem
         SubscribeLocalEvent<NiiEmployeeComponent, ComponentShutdown>(OnMapChanged);
         SubscribeLocalEvent<NiiResearchMachineComponent, MapInitEvent>(OnMapChanged);
         SubscribeLocalEvent<NiiResearchMachineComponent, ComponentShutdown>(OnMapChanged);
+        SubscribeLocalEvent<NiiChemicalReactorComponent, MapInitEvent>(OnMapChanged);
+        SubscribeLocalEvent<NiiChemicalReactorComponent, ComponentShutdown>(OnMapChanged);
         SubscribeLocalEvent<NiiInstituteComponent, ComponentShutdown>(OnMapChanged);
     }
 
@@ -64,6 +66,16 @@ public sealed partial class NiiLaboratorySystem : EntitySystem
         _reconcileQueued = true;
     }
 
+    private void OnMapChanged(Entity<NiiChemicalReactorComponent> entity, ref MapInitEvent args)
+    {
+        _reconcileQueued = true;
+    }
+
+    private void OnMapChanged(Entity<NiiChemicalReactorComponent> entity, ref ComponentShutdown args)
+    {
+        _reconcileQueued = true;
+    }
+
     private void OnMapChanged(Entity<NiiInstituteComponent> entity, ref ComponentShutdown args)
     {
         _reconcileQueued = true;
@@ -78,7 +90,9 @@ public sealed partial class NiiLaboratorySystem : EntitySystem
             laboratory.Institute = null;
             laboratory.Head = null;
             laboratory.Researchers.Clear();
+            laboratory.Technicians.Clear();
             laboratory.ResearchMachine = null;
+            laboratory.ChemicalReactor = null;
             laboratories.TryAdd(laboratory.LaboratoryId, (uid, laboratory));
         }
 
@@ -90,10 +104,18 @@ public sealed partial class NiiLaboratorySystem : EntitySystem
                 continue;
 
             employee.Laboratory = laboratory.Owner;
-            if (employee.Role == NiiEmployeeRole.LaboratoryHead)
-                laboratory.Comp.Head = uid;
-            else
-                laboratory.Comp.Researchers.Add(uid);
+            switch (employee.Role)
+            {
+                case NiiEmployeeRole.LaboratoryHead:
+                    laboratory.Comp.Head = uid;
+                    break;
+                case NiiEmployeeRole.LaboratoryTechnician:
+                    laboratory.Comp.Technicians.Add(uid);
+                    break;
+                default:
+                    laboratory.Comp.Researchers.Add(uid);
+                    break;
+            }
         }
 
         var machineQuery = EntityQueryEnumerator<NiiResearchMachineComponent>();
@@ -101,6 +123,12 @@ public sealed partial class NiiLaboratorySystem : EntitySystem
         {
             if (laboratories.TryGetValue(machine.LaboratoryId, out var laboratory))
                 laboratory.Comp.ResearchMachine = uid;
+        }
+        var reactorQuery = EntityQueryEnumerator<NiiChemicalReactorComponent>();
+        while (reactorQuery.MoveNext(out var uid, out var reactor))
+        {
+            if (laboratories.TryGetValue(reactor.LaboratoryId, out var laboratory))
+                laboratory.Comp.ChemicalReactor = uid;
         }
 
         var instituteQuery = EntityQueryEnumerator<NiiInstituteComponent>();

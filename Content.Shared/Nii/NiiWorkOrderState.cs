@@ -7,6 +7,7 @@ public enum NiiEmployeeRole : byte
 {
     LaboratoryHead,
     Researcher,
+    LaboratoryTechnician,
 }
 
 [Serializable, NetSerializable]
@@ -28,6 +29,7 @@ public enum NiiLaboratoryAssignmentMode : byte
 public enum NiiWorkOrderStatus : byte
 {
     Created,
+    AwaitingProduction,
     AwaitingAssignment,
     Assigned,
     FetchingSample,
@@ -47,4 +49,17 @@ public enum NiiWorkOrderBlockReason : byte
     MachineBusy,
     MachineInaccessible,
     EmployeeUnavailable,
+    ProductionUnavailable,
+}
+
+[Serializable, NetSerializable]
+public enum NiiProductionOrderStatus : byte
+{
+    Created,
+    FetchingInputs,
+    DeliveringInput,
+    Processing,
+    Completed,
+    Blocked,
+    Cancelled,
 }

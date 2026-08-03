@@ -17,8 +17,11 @@ public sealed partial class NiiLaboratoryComponent : Component
     public EntityUid? Institute;
     public EntityUid? Head;
     public List<EntityUid> Researchers = [];
+    public List<EntityUid> Technicians = [];
     public EntityUid? ResearchMachine;
+    public EntityUid? ChemicalReactor;
     public EntityUid? ActiveWorkOrder;
+    public EntityUid? ActiveProductionOrder;
 }
 
 /// <summary>

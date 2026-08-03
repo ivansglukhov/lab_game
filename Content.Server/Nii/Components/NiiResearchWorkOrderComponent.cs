@@ -25,4 +25,5 @@ public sealed partial class NiiResearchWorkOrderComponent : Component
     public EntityUid? AssignedTo;
     public EntityUid? Sample;
     public EntityUid? Machine;
+    public EntityUid? ProductionOrder;
 }

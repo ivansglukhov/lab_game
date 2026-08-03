@@ -3,8 +3,9 @@
   name: nii-project-stable-plasma-culture-name
   cost: 75000
   durationSeconds: 20
-  requiredReagent: Plasma
+  requiredReagent: CopperSulfate
   requiredReagentAmount: 15
+  productionProcess: NiiCopperSulfateProcess
   resultPrototype: NiiStablePlasmaCultureResult
   scienceReward: 100
   reputationReward: 5
