@@ -23,19 +23,24 @@ public sealed partial class NiiInteriorDoorSystem : EntitySystem
         while (query.MoveNext(out var doorUid, out var automaticDoor, out var door, out var doorTransform))
         {
             EntityUid? nearbyActor = null;
-            EntityUid? navigatingEmployee = null;
+            EntityUid? routedEmployee = null;
             var actors = EntityQueryEnumerator<MobStateComponent, TransformComponent>();
             while (actors.MoveNext(out var actorUid, out _, out var actorTransform))
             {
-                if (HasComp<NiiEmployeeComponent>(actorUid) && HasComp<NPCSteeringComponent>(actorUid))
-                    navigatingEmployee ??= actorUid;
+                var isEmployee = HasComp<NiiEmployeeComponent>(actorUid);
+                if (isEmployee &&
+                    TryComp<NPCSteeringComponent>(actorUid, out var steering) &&
+                    RouteUsesDoor(steering, doorTransform))
+                    routedEmployee ??= actorUid;
 
-                if (doorTransform.Coordinates.TryDistance(EntityManager, actorTransform.Coordinates, out var distance) &&
+                // Idle staff work close to the laboratory doorway, so only their actual route should hold it open.
+                if (!isEmployee &&
+                    doorTransform.Coordinates.TryDistance(EntityManager, actorTransform.Coordinates, out var distance) &&
                     distance <= automaticDoor.ActivationRange)
                     nearbyActor ??= actorUid;
             }
 
-            if (nearbyActor is not null || navigatingEmployee is not null)
+            if (nearbyActor is not null || routedEmployee is not null)
             {
                 automaticDoor.RemainingCloseDelay = automaticDoor.CloseDelaySeconds;
                 if (door.State is DoorState.Closed or DoorState.Closing)
@@ -44,7 +49,7 @@ public sealed partial class NiiInteriorDoorSystem : EntitySystem
                 if (door.State == DoorState.Open && !automaticDoor.WasOpen)
                 {
                     // Rebuild only after the opening animation has disabled collision.
-                    _steering.Unregister(navigatingEmployee ?? nearbyActor!.Value);
+                    _steering.Unregister(routedEmployee ?? nearbyActor!.Value);
                 }
 
                 automaticDoor.WasOpen = door.State == DoorState.Open;
@@ -63,5 +68,19 @@ public sealed partial class NiiInteriorDoorSystem : EntitySystem
             if (automaticDoor.RemainingCloseDelay <= 0f)
                 _doors.TryClose(doorUid, door);
         }
+    }
+
+    private static bool RouteUsesDoor(NPCSteeringComponent steering, TransformComponent doorTransform)
+    {
+        if (doorTransform.GridUid is not { } doorGrid)
+            return false;
+
+        foreach (var node in steering.CurrentPath)
+        {
+            if (node.GraphUid == doorGrid && node.Box.Contains(doorTransform.LocalPosition))
+                return true;
+        }
+
+        return false;
     }
 }

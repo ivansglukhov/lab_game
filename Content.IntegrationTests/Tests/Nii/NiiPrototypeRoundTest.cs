@@ -105,11 +105,15 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(wallCount, Is.EqualTo(92));
 
         var doorPositions = new List<Vector2>();
+        var doorUids = new List<EntityUid>();
         var doors = SEntMan.EntityQueryEnumerator<DoorComponent, TransformComponent>();
-        while (doors.MoveNext(out _, out _, out var doorTransform))
+        while (doors.MoveNext(out var doorUid, out _, out var doorTransform))
         {
             if (doorTransform.GridUid == playerTransform.GridUid)
+            {
+                doorUids.Add(doorUid);
                 doorPositions.Add(doorTransform.LocalPosition);
+            }
         }
         Assert.That(doorPositions, Is.EquivalentTo(new[]
         {
@@ -427,6 +431,10 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(institute.EventLog.Count(eventState =>
             eventState.Type == NiiInstituteEventType.ResearchCompleted), Is.EqualTo(1));
         Assert.That(institute.AiMessages[^1].Kind, Is.EqualTo(NiiAiMessageKind.Success));
+
+        await Pair.RunTicksSync(120);
+        Assert.That(doorUids.Select(uid => SEntMan.GetComponent<DoorComponent>(uid).State),
+            Is.All.EqualTo(DoorState.Closed));
 
         var delegationChanged = false;
         await Server.WaitPost(() => delegationChanged = terminalSystem.TrySetDelegatedAssignment(
