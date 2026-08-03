@@ -24,6 +24,18 @@
         type: NiiDirectorTerminalBoundUserInterface
 
 - type: entity
+  id: NiiInteriorDoor
+  parent: MetalDoor
+  name: внутренняя дверь НИИ
+  description: Автоматическая герметичная дверь, не зависящая от внешней электросети прототипа.
+  components:
+  - type: Door
+    bumpOpen: true
+    clickOpen: true
+  - type: NiiInteriorDoor
+    activationRange: 2.5
+
+- type: entity
   id: NiiResearchMachine
   parent: BaseMachine
   name: исследовательская установка
@@ -103,25 +115,32 @@
         Quantity: 30
 
 - type: entity
-  id: NiiOxygenStock
-  parent: BaseItem
-  name: ёмкость с кислородным реагентом
-  description: Конечный запас кислорода для окислительных стадий синтеза.
+  id: NiiOxygenCanister
+  parent: OxygenCanister
+  name: складская канистра с кислородом
+  description: Канистра с конечным запасом газообразного кислорода для производственных процессов НИИ.
   components:
-  - type: Sprite
-    sprite: Objects/Specific/Chemistry/beaker_large.rsi
-    state: beakerlarge
-  - type: NiiChemicalStock
-    reagent: Oxygen
-  - type: Label
-    currentLabel: кислород — 30 ед.
-  - type: Solution
-    id: beaker
-    solution:
-      maxVol: 100
-      reagents:
-      - ReagentId: Oxygen
-        Quantity: 30
+  - type: NiiGasStock
+    gas: Oxygen
+    payloadEntity: NiiOxygenTransferTank
+  - type: GasCanister
+    air:
+      volume: 1500
+      moles:
+        Oxygen: 30
+      temperature: 293.15
+
+- type: entity
+  id: NiiOxygenTransferTank
+  parent: OxygenTank
+  categories: [ HideSpawnMenu ]
+  name: переносной баллон с технологическим кислородом
+  description: Баллон, наполненный из складской канистры для доставки кислорода к реактору.
+  components:
+  - type: GasTank
+    air:
+      volume: 20
+      temperature: 293.15
 
 - type: entity
   id: NiiSulfuricAcidStock

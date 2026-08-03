@@ -1,5 +1,8 @@
 using System.Linq;
 using Content.Server.Nii.Components;
+using Content.Shared.Atmos;
+using Content.Shared.Atmos.Components;
+using Content.Shared.Atmos.Piping.Unary.Components;
 using Content.Shared.Chemistry.EntitySystems;
 using Content.Shared.Chemistry.Reagent;
 using Content.Shared.FixedPoint;
@@ -128,16 +131,102 @@ public sealed partial class NiiChemicalProductionSystem : EntitySystem
                 return true;
             }
 
-            order.Comp.Status = NiiProductionOrderStatus.Blocked;
-            Record(order, NiiInstituteEventType.ProductionBlocked, NiiInstituteEventSeverity.Attention);
-            ReleaseOrderResources(order);
-            if (order.Comp.ResearchOrder is { } researchOrderUid &&
-                TryComp<NiiResearchWorkOrderComponent>(researchOrderUid, out var researchOrder))
-                _researchOrders.Block((researchOrderUid, researchOrder), NiiWorkOrderBlockReason.ProductionUnavailable);
+            BlockProduction(order);
+            return false;
+        }
+
+        foreach (var (gas, required) in stage.GasInputs)
+        {
+            var missing = required - reactor.GasBuffer.GetMoles(gas);
+            if (missing <= 0f)
+                continue;
+
+            var stocks = EntityQueryEnumerator<NiiGasStockComponent, GasCanisterComponent>();
+            while (stocks.MoveNext(out var stockUid, out var stock, out var canister))
+            {
+                if (stock.Gas != gas || stock.ReservedBy is not null || canister.Air.GetMoles(gas) < missing)
+                    continue;
+
+                stock.ReservedBy = order.Owner;
+                order.Comp.CurrentSource = stockUid;
+                order.Comp.CurrentGas = gas;
+                order.Comp.CurrentGasAmount = missing;
+                order.Comp.Status = NiiProductionOrderStatus.FetchingInputs;
+                Record(order, NiiInstituteEventType.ProductionInputReserved, amount: (int) MathF.Ceiling(missing));
+                return true;
+            }
+
+            BlockProduction(order);
             return false;
         }
 
         return TryStartStage(order, (reactorUid, reactor), process, stage);
+    }
+
+    public EntityUid? TryPrepareGasPayload(
+        Entity<NiiProductionOrderComponent> order,
+        EntityUid sourceUid)
+    {
+        if (order.Comp.CurrentSource != sourceUid ||
+            order.Comp.CurrentPayload is not null ||
+            order.Comp.CurrentGas is not { } gas ||
+            !TryComp<NiiGasStockComponent>(sourceUid, out var stock) ||
+            stock.ReservedBy != order.Owner ||
+            stock.Gas != gas ||
+            !TryComp<GasCanisterComponent>(sourceUid, out var canister))
+            return null;
+
+        var amount = order.Comp.CurrentGasAmount;
+        if (amount <= 0f || canister.Air.GetMoles(gas) < amount)
+            return null;
+
+        var payloadUid = Spawn(stock.PayloadEntity, Transform(sourceUid).Coordinates);
+        if (!TryComp<GasTankComponent>(payloadUid, out var tank))
+        {
+            QueueDel(payloadUid);
+            return null;
+        }
+
+        canister.Air.AdjustMoles(gas, -amount);
+        tank.Air.AdjustMoles(gas, amount);
+        Dirty(sourceUid, canister);
+        Dirty(payloadUid, tank);
+        order.Comp.CurrentPayload = payloadUid;
+        order.Comp.Status = NiiProductionOrderStatus.DeliveringInput;
+        return payloadUid;
+    }
+
+    public bool TryLoadCurrentGas(
+        Entity<NiiProductionOrderComponent> order,
+        EntityUid payloadUid,
+        EntityUid technicianUid)
+    {
+        if (order.Comp.CurrentPayload != payloadUid ||
+            order.Comp.CurrentSource is not { } sourceUid ||
+            order.Comp.CurrentGas is not { } gas ||
+            order.Comp.Reactor is not { } reactorUid ||
+            !TryComp<NiiChemicalReactorComponent>(reactorUid, out var reactor) ||
+            !TryComp<NiiGasStockComponent>(sourceUid, out var stock) ||
+            !TryComp<GasTankComponent>(payloadUid, out var tank))
+            return false;
+
+        var amount = order.Comp.CurrentGasAmount;
+        if (amount <= 0f || tank.Air.GetMoles(gas) < amount)
+            return false;
+
+        tank.Air.AdjustMoles(gas, -amount);
+        reactor.GasBuffer.AdjustMoles(gas, amount);
+        Dirty(payloadUid, tank);
+        stock.ReservedBy = null;
+        order.Comp.CurrentSource = null;
+        order.Comp.CurrentPayload = null;
+        order.Comp.CurrentGas = null;
+        order.Comp.CurrentGasAmount = 0f;
+        order.Comp.Status = NiiProductionOrderStatus.FetchingInputs;
+        Record(order, NiiInstituteEventType.ProductionInputDelivered, actor: technicianUid, amount: (int) MathF.Ceiling(amount));
+        QueueDel(payloadUid);
+        TryReserveNextInput(order);
+        return true;
     }
 
     public bool TryLoadCurrentInput(
@@ -192,9 +281,20 @@ public sealed partial class NiiChemicalProductionSystem : EntitySystem
                 return false;
         }
 
+        foreach (var (gas, amount) in stage.GasInputs)
+        {
+            if (reactor.Comp.GasBuffer.GetMoles(gas) < amount)
+                return false;
+        }
+
         foreach (var (reagent, amount) in stage.Inputs)
         {
             _solutions.RemoveReagent(solutionEntity.Value, reagent, amount);
+        }
+
+        foreach (var (gas, amount) in stage.GasInputs)
+        {
+            reactor.Comp.GasBuffer.AdjustMoles(gas, -amount);
         }
 
         reactor.Comp.IsProcessing = true;
@@ -265,6 +365,11 @@ public sealed partial class NiiChemicalProductionSystem : EntitySystem
             stock.ReservedBy == order.Owner)
             stock.ReservedBy = null;
 
+        if (order.Comp.CurrentSource is { } gasSourceUid &&
+            TryComp<NiiGasStockComponent>(gasSourceUid, out var gasStock) &&
+            gasStock.ReservedBy == order.Owner)
+            gasStock.ReservedBy = null;
+
         if (order.Comp.AssignedTo is { } technicianUid &&
             TryComp<NiiEmployeeComponent>(technicianUid, out var technician) &&
             technician.ActiveWorkOrder == order.Owner)
@@ -274,6 +379,16 @@ public sealed partial class NiiChemicalProductionSystem : EntitySystem
             TryComp<NiiLaboratoryComponent>(laboratoryUid, out var laboratory) &&
             laboratory.ActiveProductionOrder == order.Owner)
             laboratory.ActiveProductionOrder = null;
+    }
+
+    private void BlockProduction(Entity<NiiProductionOrderComponent> order)
+    {
+        order.Comp.Status = NiiProductionOrderStatus.Blocked;
+        Record(order, NiiInstituteEventType.ProductionBlocked, NiiInstituteEventSeverity.Attention);
+        ReleaseOrderResources(order);
+        if (order.Comp.ResearchOrder is { } researchOrderUid &&
+            TryComp<NiiResearchWorkOrderComponent>(researchOrderUid, out var researchOrder))
+            _researchOrders.Block((researchOrderUid, researchOrder), NiiWorkOrderBlockReason.ProductionUnavailable);
     }
 
     private void Record(

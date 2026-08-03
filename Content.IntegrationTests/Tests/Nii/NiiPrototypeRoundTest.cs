@@ -12,11 +12,13 @@ using Content.Server.Nii.Components;
 using Content.Server.Nii.Systems;
 using Content.Server.NPC.HTN;
 using Content.Shared.Atmos;
+using Content.Shared.Atmos.Piping.Unary.Components;
 using Content.Shared.Chemistry.EntitySystems;
 using Content.Shared.Chemistry.Reagent;
 using Content.Shared.CCVar;
 using Content.Shared.GameTicking;
 using Content.Shared.FixedPoint;
+using Content.Shared.Doors.Components;
 using Content.Shared.Gravity;
 using Content.Shared.Humanoid;
 using Content.Shared.Humanoid.Prototypes;
@@ -100,7 +102,34 @@ public sealed class NiiPrototypeRoundTest : GameTest
         {
             wallCount++;
         }
-        Assert.That(wallCount, Is.EqualTo(94));
+        Assert.That(wallCount, Is.EqualTo(92));
+
+        var doorPositions = new List<Vector2>();
+        var doors = SEntMan.EntityQueryEnumerator<DoorComponent, TransformComponent>();
+        while (doors.MoveNext(out _, out _, out var doorTransform))
+        {
+            if (doorTransform.GridUid == playerTransform.GridUid)
+                doorPositions.Add(doorTransform.LocalPosition);
+        }
+        Assert.That(doorPositions, Is.EquivalentTo(new[]
+        {
+            new Vector2(10.5f, 9.5f),
+            new Vector2(10.5f, 6.5f),
+        }));
+
+        var windowPositions = new List<Vector2>();
+        var mapEntities = SEntMan.EntityQueryEnumerator<MetaDataComponent, TransformComponent>();
+        while (mapEntities.MoveNext(out _, out var metadata, out var entityTransform))
+        {
+            if (metadata.EntityPrototype?.ID == "ReinforcedWindow" &&
+                entityTransform.GridUid == playerTransform.GridUid)
+                windowPositions.Add(entityTransform.LocalPosition);
+        }
+        Assert.That(windowPositions, Is.EquivalentTo(new[]
+        {
+            new Vector2(5.5f, 12.5f),
+            new Vector2(5.5f, 13.5f),
+        }));
 
         var atmosphere = Server.System<AtmosphereSystem>().GetContainingMixture(player.Value);
         Assert.That(atmosphere, Is.Not.Null);
@@ -224,8 +253,23 @@ public sealed class NiiPrototypeRoundTest : GameTest
         }
 
         Assert.That(StockAmount("Copper"), Is.EqualTo(FixedPoint2.New(30)));
-        Assert.That(StockAmount("Oxygen"), Is.EqualTo(FixedPoint2.New(30)));
         Assert.That(StockAmount("SulfuricAcid"), Is.EqualTo(FixedPoint2.New(60)));
+
+        var chemicalStocks = SEntMan.EntityQueryEnumerator<NiiChemicalStockComponent, TransformComponent>();
+        var chemicalStockCount = 0;
+        while (chemicalStocks.MoveNext(out _, out _, out var stockTransform))
+        {
+            chemicalStockCount++;
+            Assert.That(stockTransform.LocalPosition.Y, Is.LessThan(6.5f));
+        }
+        Assert.That(chemicalStockCount, Is.EqualTo(2));
+
+        var gasStocks = SEntMan.EntityQueryEnumerator<NiiGasStockComponent, GasCanisterComponent, TransformComponent>();
+        Assert.That(gasStocks.MoveNext(out var oxygenCanisterUid, out var oxygenStock, out var oxygenCanister, out var oxygenTransform), Is.True);
+        Assert.That(gasStocks.MoveNext(out _, out _, out _, out _), Is.False);
+        Assert.That(oxygenStock!.Gas, Is.EqualTo(Gas.Oxygen));
+        Assert.That(oxygenCanister!.Air.GetMoles(Gas.Oxygen), Is.EqualTo(30f).Within(0.001f));
+        Assert.That(oxygenTransform!.LocalPosition.Y, Is.LessThan(6.5f));
 
         var initialSamples = SEntMan.EntityQueryEnumerator<NiiResearchSampleComponent>();
         Assert.That(initialSamples.MoveNext(out _, out _), Is.False);
@@ -274,8 +318,14 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(SEntMan.GetComponent<TransformComponent>(researcherUid).LocalPosition,
             Is.EqualTo(researcherStartPosition));
 
-        for (var i = 0; i < 300 && workOrder.Status == NiiWorkOrderStatus.AwaitingProduction; i++)
+        var minimumTechnicianY = technicianStartPosition.Y;
+        for (var i = 0; i < 500 && workOrder.Status == NiiWorkOrderStatus.AwaitingProduction; i++)
+        {
             await Pair.RunTicksSync(5);
+            minimumTechnicianY = Math.Min(
+                minimumTechnicianY,
+                SEntMan.GetComponent<TransformComponent>(technicianUid).LocalPosition.Y);
+        }
 
         var technicianHtn = SEntMan.GetComponent<HTNComponent>(technicianUid);
         var reactorContents = "unavailable";
@@ -283,15 +333,15 @@ public sealed class NiiPrototypeRoundTest : GameTest
             solutions.TryGetSolution(diagnosticReactor, "reactor", out _, out var diagnosticSolution))
         {
             reactorContents = $"Cu={diagnosticSolution!.GetTotalPrototypeQuantity("Copper")}," +
-                              $"O2={diagnosticSolution.GetTotalPrototypeQuantity("Oxygen")}," +
-                              $"CuO={diagnosticSolution.GetTotalPrototypeQuantity("CopperOxide")}";
+                              $"CuO={diagnosticSolution.GetTotalPrototypeQuantity("CopperOxide")}," +
+                              $"O2gas={SEntMan.GetComponent<NiiChemicalReactorComponent>(diagnosticReactor).GasBuffer.GetMoles(Gas.Oxygen)}";
         }
         Assert.That(
             workOrder.Status,
             Is.EqualTo(NiiWorkOrderStatus.AwaitingAssignment),
             $"production={productionOrder.Status}, stage={productionOrder.StageIndex}, " +
-            $"input={productionOrder.CurrentInput}, reactor={reactorContents}, " +
-            $"stocks=Cu:{StockAmount("Copper")}/O2:{StockAmount("Oxygen")}/acid:{StockAmount("SulfuricAcid")}, " +
+            $"input={productionOrder.CurrentInput}/{productionOrder.CurrentGas}, reactor={reactorContents}, " +
+            $"stocks=Cu:{StockAmount("Copper")}/O2:{oxygenCanister.Air.GetMoles(Gas.Oxygen)}/acid:{StockAmount("SulfuricAcid")}, " +
             $"plan={technicianHtn.Plan?.CurrentOperator.GetType().Name ?? "none"}, " +
             $"position={SEntMan.GetComponent<TransformComponent>(technicianUid).LocalPosition}");
         Assert.That(productionOrder.Status, Is.EqualTo(NiiProductionOrderStatus.Completed));
@@ -299,8 +349,10 @@ public sealed class NiiPrototypeRoundTest : GameTest
         Assert.That(SEntMan.GetComponent<NiiEmployeeComponent>(technicianUid).ActiveWorkOrder, Is.Null);
         Assert.That(SEntMan.GetComponent<TransformComponent>(technicianUid).LocalPosition,
             Is.Not.EqualTo(technicianStartPosition));
+        Assert.That(minimumTechnicianY, Is.LessThan(6.5f));
         Assert.That(StockAmount("Copper"), Is.EqualTo(FixedPoint2.New(25)));
-        Assert.That(StockAmount("Oxygen"), Is.EqualTo(FixedPoint2.New(25)));
+        Assert.That(SEntMan.GetComponent<GasCanisterComponent>(oxygenCanisterUid).Air.GetMoles(Gas.Oxygen),
+            Is.EqualTo(25f).Within(0.001f));
         Assert.That(StockAmount("SulfuricAcid"), Is.EqualTo(FixedPoint2.New(50)));
         Assert.That(institute.EventLog.Count(eventState =>
             eventState.Type == NiiInstituteEventType.ProductionOrderCreated), Is.EqualTo(1));

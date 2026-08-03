@@ -19,6 +19,7 @@
   stages:
   - inputs:
       Copper: 5
+    gasInputs:
       Oxygen: 5
     output: CopperOxide
     outputAmount: 5

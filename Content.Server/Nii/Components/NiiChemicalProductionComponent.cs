@@ -1,3 +1,4 @@
+using Content.Shared.Atmos;
 using Content.Shared.Chemistry.Reagent;
 using Content.Shared.FixedPoint;
 using Content.Shared.Nii;
@@ -18,6 +19,7 @@ public sealed partial class NiiChemicalReactorComponent : Component
     public EntityUid? ActiveOrder;
     public bool IsProcessing;
     public float ElapsedSeconds;
+    public GasMixture GasBuffer = new(5f) { Temperature = Atmospherics.T20C };
 }
 
 [RegisterComponent]
@@ -28,6 +30,18 @@ public sealed partial class NiiChemicalStockComponent : Component
 
     [DataField]
     public string SolutionName = "beaker";
+
+    public EntityUid? ReservedBy;
+}
+
+[RegisterComponent]
+public sealed partial class NiiGasStockComponent : Component
+{
+    [DataField(required: true)]
+    public Gas Gas;
+
+    [DataField]
+    public EntProtoId PayloadEntity = "NiiOxygenTransferTank";
 
     public EntityUid? ReservedBy;
 }
@@ -45,7 +59,10 @@ public sealed partial class NiiProductionOrderComponent : Component
     public EntityUid? AssignedTo;
     public EntityUid? Reactor;
     public EntityUid? CurrentSource;
+    public EntityUid? CurrentPayload;
     public ProtoId<ReagentPrototype>? CurrentInput;
     public FixedPoint2 CurrentInputAmount;
+    public Gas? CurrentGas;
+    public float CurrentGasAmount;
     public int StageIndex;
 }

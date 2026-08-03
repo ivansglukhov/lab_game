@@ -1,5 +1,6 @@
 using Content.Shared.Chemistry.Reagent;
 using Content.Shared.FixedPoint;
+using Content.Shared.Atmos;
 using Robust.Shared.Prototypes;
 
 namespace Content.Shared.Nii.Prototypes;
@@ -29,6 +30,9 @@ public sealed partial class NiiChemicalProcessStage
 {
     [DataField(required: true)]
     public Dictionary<ProtoId<ReagentPrototype>, FixedPoint2> Inputs { get; private set; } = [];
+
+    [DataField]
+    public Dictionary<Gas, float> GasInputs { get; private set; } = [];
 
     [DataField(required: true)]
     public ProtoId<ReagentPrototype> Output { get; private set; }

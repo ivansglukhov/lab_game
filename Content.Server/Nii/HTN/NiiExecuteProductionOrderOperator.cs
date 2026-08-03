@@ -65,12 +65,13 @@ public sealed partial class NiiExecuteProductionOrderOperator : HTNOperator
             return HTNOperatorStatus.Continuing;
         }
 
+        if (order.CurrentGas is not null)
+            return UpdateGasDelivery(technicianUid, orderUid, order, sourceUid);
+
         if (!_hands.IsHolding(technicianUid, sourceUid))
         {
-            if (!MoveIntoRange(technicianUid, sourceUid, out var sourceMovement))
-                return sourceMovement == SteeringStatus.NoPath
-                    ? Finish(blackboard, HTNOperatorStatus.Failed)
-                    : HTNOperatorStatus.Continuing;
+            if (!MoveIntoRange(technicianUid, sourceUid, out _))
+                return HTNOperatorStatus.Continuing;
 
             _steering.Unregister(technicianUid);
             if (!_hands.TryPickupAnyHand(technicianUid, sourceUid))
@@ -81,16 +82,57 @@ public sealed partial class NiiExecuteProductionOrderOperator : HTNOperator
         if (order.Reactor is not { } reactorUid || _entityManager.Deleted(reactorUid))
             return Finish(blackboard, HTNOperatorStatus.Failed);
 
-        if (!MoveIntoRange(technicianUid, reactorUid, out var reactorMovement))
-            return reactorMovement == SteeringStatus.NoPath
-                ? Finish(blackboard, HTNOperatorStatus.Failed)
-                : HTNOperatorStatus.Continuing;
+        if (!MoveIntoRange(technicianUid, reactorUid, out _))
+            return HTNOperatorStatus.Continuing;
 
         _steering.Unregister(technicianUid);
         if (!_production.TryLoadCurrentInput((orderUid, order), sourceUid, technicianUid))
             return HTNOperatorStatus.Failed;
 
         _hands.TryDrop(technicianUid, sourceUid);
+        return HTNOperatorStatus.Continuing;
+    }
+
+    private HTNOperatorStatus UpdateGasDelivery(
+        EntityUid technicianUid,
+        EntityUid orderUid,
+        NiiProductionOrderComponent order,
+        EntityUid sourceUid)
+    {
+        var payloadUid = order.CurrentPayload;
+        if (payloadUid is null)
+        {
+            if (!MoveIntoRange(technicianUid, sourceUid, out _))
+                return HTNOperatorStatus.Continuing;
+
+            _steering.Unregister(technicianUid);
+            payloadUid = _production.TryPrepareGasPayload((orderUid, order), sourceUid);
+            if (payloadUid is null)
+                return HTNOperatorStatus.Continuing;
+        }
+
+        if (_entityManager.Deleted(payloadUid.Value))
+            return HTNOperatorStatus.Failed;
+
+        if (!_hands.IsHolding(technicianUid, payloadUid.Value) &&
+            !_hands.TryPickupAnyHand(technicianUid, payloadUid.Value))
+            return HTNOperatorStatus.Continuing;
+
+        if (order.Reactor is not { } reactorUid || _entityManager.Deleted(reactorUid))
+            return HTNOperatorStatus.Failed;
+
+        if (!MoveIntoRange(technicianUid, reactorUid, out _))
+            return HTNOperatorStatus.Continuing;
+
+        _steering.Unregister(technicianUid);
+        if (!_hands.TryDrop(
+                technicianUid,
+                payloadUid.Value,
+                checkActionBlocker: false,
+                doDropInteraction: false))
+            return HTNOperatorStatus.Continuing;
+
+        _production.TryLoadCurrentGas((orderUid, order), payloadUid.Value, technicianUid);
         return HTNOperatorStatus.Continuing;
     }
 
@@ -127,6 +169,12 @@ public sealed partial class NiiExecuteProductionOrderOperator : HTNOperator
         var steering = _steering.Register(owner, _entityManager.GetComponent<TransformComponent>(target).Coordinates);
         steering.Range = WorkRange;
         status = steering.Status;
+
+        // An automatic door can open after pathfinding has already reported NoPath.
+        // Discard that stale route so the next update builds a path through the now-open doorway.
+        if (status == SteeringStatus.NoPath)
+            _steering.Unregister(owner);
+
         return status == SteeringStatus.InRange;
     }
 
